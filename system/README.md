@@ -95,4 +95,4 @@ The binary falls back to `libx264 -qp 0` (lossless, CPU) automatically if no NVE
 
 ## Project
 
-iris is part of ASCEND AI. Authored by Harsh Patel.
+Authored by Harsh Patel.
