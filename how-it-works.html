@@ -4,100 +4,227 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>how it works - iris</title>
-  <meta name="description" content="Technical details of the Iris compression system.">
-  <link rel="stylesheet" href="styles.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&display=swap');
+
+    :root {
+      --bg: #F5F0E8;
+      --text: #1C3A2B;
+      --accent: #C4856A;
+      --card-bg: #FAF7F2;
+      --font-body: 'EB Garamond', serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 18px;
+      line-height: 1.8;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 32px 48px;
+      z-index: 100;
+      background: var(--bg);
+    }
+
+    .nav-left {
+      font-family: var(--font-body);
+      font-style: italic;
+      font-size: 24px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .nav-right {
+      display: flex;
+      gap: 24px;
+    }
+
+    .nav-right a {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: lowercase;
+      font-variant: small-caps;
+      text-decoration: none;
+      color: var(--text);
+      letter-spacing: 0.05em;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 32px 60px 32px;
+    }
+    
+    section {
+      padding: 60px 0;
+    }
+
+    .section-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent);
+      text-transform: lowercase;
+      font-variant: small-caps;
+      letter-spacing: 0.15em;
+      margin: 0 0 32px 0;
+      font-weight: normal;
+    }
+
+    .hero-title {
+      font-size: 48px;
+      line-height: 1.1;
+      font-weight: 400;
+      letter-spacing: 0.02em;
+      margin: 60px 0 20px 0;
+    }
+
+    .prose p {
+      margin-bottom: 24px;
+    }
+    
+    .prose a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(196,133,106,0.3);
+    }
+
+    .terminal-card {
+      background-color: var(--text);
+      color: var(--bg);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 20px;
+      border-radius: 2px;
+      margin: 16px 0 32px 0;
+      display: block;
+      box-sizing: border-box;
+    }
+
+    footer {
+      text-align: center;
+      padding: 60px 0;
+      font-style: italic;
+      opacity: 0.6;
+      font-size: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .hero-title {
+        font-size: 36px;
+      }
+      section {
+         padding: 40px 0;
+      }
+      nav {
+        padding: 24px;
+      }
+    }
+  </style>
 </head>
 <body>
 
-  <header class="fade-in">
-    <div class="logo"><a href="index.html">iris</a></div>
-    <nav>
-      <a href="index.html">home</a>
-      <a href="get-started.html">get started</a>
-    </nav>
-  </header>
+  <nav>
+    <a href="index.html" class="nav-left">iris</a>
+    <div class="nav-right">
+      <a href="get-started.html">download</a>
+      <a href="https://github.com/Carsk101/iris">github</a>
+    </div>
+  </nav>
 
-  <main class="container">
-    <section class="fade-in">
-      <h2>the architecture</h2>
-      <div class="prose rhythm-1">
-        <p>Iris treats data compression as a perception problem. Rather than streaming bytes into a dictionary compressor, it views the dataset at once, clusters similar bytes, and encodes those clusters spatially.</p>
+  <div class="container">
+    <h1 class="hero-title">how it works</h1>
+    
+    <section>
+      <h2 class="section-title">the architecture</h2>
+      <div class="prose">
+        <p>iris treats data compression as a perception problem. rather than applying a single algorithm to everything, it reads the dataset once, understands its structural profile, and routes the data through the stage best equipped to eliminate its specific redundancy.</p>
       </div>
 
       <!-- Diagram: Architecture Outline -->
-      <svg viewBox="0 0 600 200" style="width: 100%; height: auto; margin: 3em 0; stroke: var(--text-color); stroke-width: 1.5; fill: none; font-family: var(--font-body);">
-        <rect x="50" y="50" width="120" height="100" rx="4" />
-        <text x="110" y="95" text-anchor="middle" font-size="14" stroke="none" fill="var(--text-color)">VisionSort</text>
-        <text x="110" y="115" text-anchor="middle" font-size="12" stroke="none" fill="var(--accent-color)" font-style="italic">Sort & Index</text>
+      <svg viewBox="0 0 600 200" style="width: 100%; height: auto; margin: 3em 0; stroke: var(--text); stroke-width: 1.5; fill: none; font-family: var(--font-body);">
+        <rect x="50" y="50" width="120" height="100" rx="2" style="fill: var(--card-bg); stroke: rgba(28,58,43,0.12); stroke-width: 1;" />
+        <text x="110" y="95" text-anchor="middle" font-size="16" stroke="none" fill="var(--text)" style="text-transform: lowercase;">profile</text>
+        <text x="110" y="120" text-anchor="middle" font-size="12" stroke="none" fill="var(--accent)" font-style="italic">measure entropy</text>
 
-        <path d="M180 100 L230 100" />
+        <path d="M180 100 L230 100" stroke="rgba(28,58,43,0.2)" stroke-width="1" />
+        <polygon points="230,100 225,97 225,103" fill="rgba(28,58,43,0.2)" stroke="none" />
 
-        <rect x="240" y="50" width="120" height="100" rx="4" />
-        <text x="300" y="95" text-anchor="middle" font-size="14" stroke="none" fill="var(--text-color)">Frame Mapper</text>
-        <text x="300" y="115" text-anchor="middle" font-size="12" stroke="none" fill="var(--accent-color)" font-style="italic">1D to 2D</text>
+        <rect x="240" y="50" width="120" height="100" rx="2" style="fill: var(--card-bg); stroke: rgba(28,58,43,0.12); stroke-width: 1;"  />
+        <text x="300" y="95" text-anchor="middle" font-size="16" stroke="none" fill="var(--text)" style="text-transform: lowercase;">routing</text>
+        <text x="300" y="120" text-anchor="middle" font-size="12" stroke="none" fill="var(--accent)" font-style="italic">grammar & graph</text>
 
-        <path d="M370 100 L420 100" />
+        <path d="M370 100 L420 100" stroke="rgba(28,58,43,0.2)" stroke-width="1"  />
+        <polygon points="420,100 415,97 415,103" fill="rgba(28,58,43,0.2)" stroke="none" />
 
-        <rect x="430" y="50" width="120" height="100" rx="4" />
-        <text x="490" y="95" text-anchor="middle" font-size="14" stroke="none" fill="var(--text-color)">AV1 Codec</text>
-        <text x="490" y="115" text-anchor="middle" font-size="12" stroke="none" fill="var(--accent-color)" font-style="italic">Lossless Encode</text>
+        <rect x="430" y="50" width="120" height="100" rx="2" style="fill: var(--card-bg); stroke: rgba(28,58,43,0.12); stroke-width: 1;"  />
+        <text x="490" y="95" text-anchor="middle" font-size="16" stroke="none" fill="var(--text)" style="text-transform: lowercase;">encoding</text>
+        <text x="490" y="120" text-anchor="middle" font-size="12" stroke="none" fill="var(--accent)" font-style="italic">hardware / cpu</text>
       </svg>
     </section>
 
-    <section class="fade-in">
-      <h2>visionsort & entropy routing</h2>
-      <div class="prose rhythm-2">
-        <p>Binary data is sorted using VisionSort, which builds a probabilistic model and routes data through four branches: NearlyFree, Verify, PlacementSort, or FullSort.</p>
-        <p>Clustering bytes strips the original order. VisionSort isolates low-entropy regions where the resulting permutation index is nearly deterministic. The rest is compressed via zstd.</p>
+    <section>
+      <h2 class="section-title">profile & route</h2>
+      <div class="prose">
+        <p>a single read-only pass calculates byte entropy, autocorrelation at multiple lags, and block fingerprints. the system then routes the data dynamically.</p>
+        <p>structured text like csv decomposes via a column grammar into individually typed streams. binary data with a dominant period falls into wrapping i8 residuals via resonance.</p>
       </div>
 
-<pre><code>// Simplistic representation of the permutation record
-struct PermutationRecord {
-    original_position: u64,
-    sorted_position: u64,
+<pre class="terminal-card"><code>// example of dynamic grammar routing
+struct colspec {
+    enc:        u8,
+    pfx:        vec&lt;u8&gt;,
+    sfx:        vec&lt;u8&gt;,
+    data:       vec&lt;u8&gt;,
 }</code></pre>
     </section>
 
-    <section class="fade-in">
-      <h2>the spatial mapping</h2>
-      <div class="prose rhythm-3">
-        <p>The sorted stream is packed sequentially into grayscale YUV420p frames. Every byte acts as a luminance value on the Y-plane. Chroma channels remain neutral.</p>
-        <p>When laid out horizontally, these "images" form massive, stable bands of uniform color. From one frame to the next, time stands conceptually still.</p>
-      </div>
-
-      <!-- Diagram: Grayscale Bands -->
-      <svg viewBox="0 0 600 120" style="width: 100%; height: auto; margin: 3em 0;">
-        <rect x="0" y="0" width="180" height="120" fill="#E8E8E8" />
-        <rect x="0" y="40" width="180" height="40" fill="#D0D0D0" />
-        <rect x="0" y="80" width="180" height="40" fill="#B0B0B0" />
-
-        <rect x="210" y="0" width="180" height="120" fill="#D0D0D0" />
-        <rect x="210" y="50" width="180" height="70" fill="#B0B0B0" />
-
-        <rect x="420" y="0" width="180" height="120" fill="#B0B0B0" />
-        <rect x="420" y="20" width="180" height="100" fill="#909090" />
-        <rect x="420" y="90" width="180" height="30" fill="#707070" />
-
-        <text x="90" y="140" text-anchor="middle" font-family="var(--font-heading)" font-style="italic" fill="var(--accent-color)" font-size="14">Frame 1</text>
-        <text x="300" y="140" text-anchor="middle" font-family="var(--font-heading)" font-style="italic" fill="var(--accent-color)" font-size="14">Frame 2</text>
-        <text x="510" y="140" text-anchor="middle" font-family="var(--font-heading)" font-style="italic" fill="var(--accent-color)" font-size="14">Frame 3</text>
-      </svg>
-    </section>
-
-    <section class="fade-in">
-      <h2>hardware encoding</h2>
-      <div class="prose rhythm-1">
-        <p>The raw frames stream via FFmpeg into an NVIDIA GPU. The system negotiates av1_nvenc on RTX 4000+ architectures, falling back to hevc_nvenc on older hardware.</p>
-        <p>Because the frames are essentially static horizontal blocks, NVENC's motion estimators compress the data instantly with near-zero error. Without NVIDIA, Iris elegantly diverts to the CPU via libsvtav1.</p>
+    <section>
+      <h2 class="section-title">prediction graph</h2>
+      <div class="prose">
+        <p>standard compressors like lz77 are constrained by a small sliding window. iris removes this limitation by finding similar blocks anywhere in the file via minhash fingerprints.</p>
+        <p>highly correlated structural blocks are matched regardless of physical distance and stored efficiently as xor deltas.</p>
       </div>
     </section>
-  </main>
 
-  <footer class="fade-in">
-    <p>iris</p>
-    <p><a href="https://github.com/Carsk101/visionsort" target="_blank" rel="noopener noreferrer">github</a></p>
+    <section>
+      <h2 class="section-title">hardware encoding</h2>
+      <div class="prose">
+        <p>for data that remains highly entropic (&gt;0.80), the bytes are context-packed into frames and pushed to an nvidia gpu. the system negotiates av1_nvenc or hevc_nvenc.</p>
+        <p>if no suitable gpu is found, it falls back elegantly to the cpu using lossless libx264. near-constant residuals (&lt;0.15) bypass the gpu entirely and are packed via pure bwt+mtf.</p>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    built in rust. authored by harsh patel.
   </footer>
 
-  <script src="main.js"></script>
 </body>
 </html>
