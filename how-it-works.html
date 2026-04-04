@@ -20,9 +20,8 @@
   <main class="container">
     <section class="fade-in">
       <h2>the architecture</h2>
-      <div class="prose indent-large">
-        <p>At its core, Iris treats data compression as a perception problem. Rather than streaming linear sequences of bytes into a generic dictionary compressor (like LZ77 or DEFLATE), it views the entire dataset at once, clusters similar bytes, and encodes those clusters spatially.</p>
-        <p>This is achieved in three distinct phases: entropy-based sorting, spatial mapping, and video codec inter-frame prediction.</p>
+      <div class="prose rhythm-1">
+        <p>Iris treats data compression as a perception problem. Rather than streaming bytes into a dictionary compressor, it views the dataset at once, clusters similar bytes, and encodes those clusters spatially.</p>
       </div>
 
       <!-- Diagram: Architecture Outline -->
@@ -47,9 +46,9 @@
 
     <section class="fade-in">
       <h2>visionsort & entropy routing</h2>
-      <div class="prose">
-        <p>Before any traditional compression occurs, the raw binary data is read into memory and sorted using <a href="https://github.com/Carsk101/visionsort" target="_blank">VisionSort</a>. VisionSort does not just blindly compare bytes. It uses Bayesian within-call learning and entropy-based routing to quickly classify and sort data segments.</p>
-        <p>By clustering identical and similar bytes together, we maximize the length of contiguous blocks of data that share the same value. Because the data's original order is lost during sorting, we generate a permutation index alongside the sorted data, allowing perfect reconstruction.</p>
+      <div class="prose rhythm-2">
+        <p>Binary data is sorted using VisionSort, which builds a probabilistic model and routes data through four branches: NearlyFree, Verify, PlacementSort, or FullSort.</p>
+        <p>Clustering bytes strips the original order. VisionSort isolates low-entropy regions where the resulting permutation index is nearly deterministic. The rest is compressed via zstd.</p>
       </div>
 
 <pre><code>// Simplistic representation of the permutation record
@@ -61,9 +60,9 @@ struct PermutationRecord {
 
     <section class="fade-in">
       <h2>the spatial mapping</h2>
-      <div class="prose indent-large">
-        <p>The resulting sorted byte stream is mapped onto a sequence of grayscale video frames. For example, treating every 8-bit byte as a physical pixel's luminance value.</p>
-        <p>When the highly sorted data is laid out horizontally and wrapped according to frame width, the resulting "images" appear as wide, horizontal bands of uniform color. From one frame to the next, these bands change very slowly in the temporal domain.</p>
+      <div class="prose rhythm-3">
+        <p>The sorted stream is packed sequentially into grayscale YUV420p frames. Every byte acts as a luminance value on the Y-plane. Chroma channels remain neutral.</p>
+        <p>When laid out horizontally, these "images" form massive, stable bands of uniform color. From one frame to the next, time stands conceptually still.</p>
       </div>
 
       <!-- Diagram: Grayscale Bands -->
@@ -86,10 +85,10 @@ struct PermutationRecord {
     </section>
 
     <section class="fade-in">
-      <h2>av1 lossless encoding</h2>
-      <div class="prose">
-        <p>The sequence of frames is handed to an AV1 encoder (such as SVT-AV1 or rav1e) configured for strict lossless encoding. AV1's advanced inter-frame prediction engine is world-class at detecting temporal stability.</p>
-        <p>Because the generated frames are largely static blocks of grayscale bands, the encoder can predict subsequent frames based on prior frames with near-zero error. This yields extreme compression ratios that typical dictionary compression algorithms struggle to achieve on arbitrary binary data.</p>
+      <h2>hardware encoding</h2>
+      <div class="prose rhythm-1">
+        <p>The raw frames stream via FFmpeg into an NVIDIA GPU. The system negotiates av1_nvenc on RTX 4000+ architectures, falling back to hevc_nvenc on older hardware.</p>
+        <p>Because the frames are essentially static horizontal blocks, NVENC's motion estimators compress the data instantly with near-zero error. Without NVIDIA, Iris elegantly diverts to the CPU via libsvtav1.</p>
       </div>
     </section>
   </main>

@@ -20,15 +20,15 @@
     <div class="container">
       <section id="the-idea" class="fade-in">
         <h2>the idea</h2>
-        <div class="prose indent-large">
-          <p>Most compression tools fight redundancy with brute-force algorithms. Iris takes a different path. It looks at your data first, sorts it by what it sees, then hands it to a codec designed to compress visual similarity.</p>
-          <p>AV1 does what it was built to do. Your data gets smaller. And it runs on any machine you own.</p>
+        <div class="prose rhythm-2">
+          <p>Most tools fight redundancy with brute-force. Iris looks at your data first, sorts by what it sees, then hands it to an NVIDIA GPU hardware encoder built for visual similarity.</p>
+          <p>NVENC compresses those clusters instantly. No GPU? It falls back elegantly to your CPU.</p>
         </div>
       </section>
 
       <section id="how-it-works" class="fade-in">
         <h2>how it works</h2>
-        <div class="pipeline">
+        <div class="pipeline rhythm-1">
           <div class="pipeline-stage">
             <svg class="pipeline-svg" viewBox="0 0 24 24">
               <!-- Raw data representation -->
@@ -76,7 +76,7 @@
               <polygon points="12,2 22,12 12,22 2,12"/>
               <circle cx="12" cy="12" r="2"/>
             </svg>
-            <div class="pipeline-label">av1 bitstream</div>
+            <div class="pipeline-label">nvenc bitstream</div>
           </div>
         </div>
         <a href="how-it-works.html" class="read-more">read more &rarr;</a>
@@ -114,9 +114,9 @@
 
       <section id="built-on" class="fade-in">
         <h2>built on</h2>
-        <div class="prose">
-          <p>Iris is made possible by <a href="https://github.com/Carsk101/visionsort" target="_blank" rel="noopener noreferrer">VisionSort</a>, an algorithm that treats sorting as a perception problem through entropy routing.</p>
-          <p>It utilizes <a href="https://aomedia.org/av1/" target="_blank" rel="noopener noreferrer">AV1</a> encoding, an open, royalty-free codec format designed for video transmission over the internet, repurposed here as a general data compressor.</p>
+        <div class="prose rhythm-3">
+          <p>Iris relies on <a href="https://github.com/Carsk101/visionsort" target="_blank" rel="noopener noreferrer">VisionSort</a>, an algorithm treating sorting as a perception problem.</p>
+          <p>It utilizes NVIDIA's NVENC silicon—and SVT-AV1 on CPU—repurposing video motion estimation to squeeze arbitrary data.</p>
         </div>
       </section>
 
