@@ -3,18 +3,24 @@
 /// Finds similar (not necessarily identical) blocks anywhere in the file,
 /// regardless of distance. LZ77 max window is 8MB. iris has no window limit.
 ///
-/// Mechanism: MinHash fingerprints from the profiling pass index every 4KB block.
-/// For each block, find its nearest neighbor by Hamming distance on fingerprints.
+/// Mechanism: SimHash fingerprints from the profiling pass index every 4KB block.
+/// For each block, find its nearest neighbor by Hamming distance on SimHash.
+/// SimHash + popcount correctly approximates cosine similarity of shingle sets.
 /// If similarity > threshold: store (ref_block_id, XOR_delta).
 /// XOR delta of similar blocks is highly compressible.
 ///
-/// This is the "distance weapon" from the roadmap — the thing LZ77 physically
-/// cannot do.
+/// Lookup uses a hash table on band signatures (LSH-lite) for O(n) expected time.
+
+use std::collections::HashMap;
 
 pub const PRED_MIN_BLOCKS:     usize = 2;
-pub const PRED_SIMILARITY_MIN: f64   = 0.55;   // Jaccard-like threshold
+pub const PRED_SIMILARITY_MIN: f64   = 0.55;   // SimHash cosine threshold
 pub const PRED_BLOCK_SIZE:     usize = 4096;
 pub const PRED_MIN_GAIN:       f64   = 0.15;   // delta must be ≥15% smaller than raw
+
+/// Number of bands for LSH lookup. Each band = 64/NUM_BANDS bits.
+/// Blocks sharing any band signature are candidate neighbors.
+const NUM_BANDS: usize = 4; // 4 bands × 16 bits each
 
 #[derive(Debug, Clone)]
 pub enum BlockEncoding {
@@ -29,6 +35,7 @@ pub enum BlockEncoding {
 }
 
 /// Build prediction graph over blocks. Returns per-block encodings.
+/// Uses LSH band signatures for O(n) expected-time neighbor lookup.
 pub fn build(data: &[u8], fingerprints: &[u64]) -> Vec<BlockEncoding> {
     let n = data.len();
     let n_blocks = fingerprints.len();
@@ -36,6 +43,10 @@ pub fn build(data: &[u8], fingerprints: &[u64]) -> Vec<BlockEncoding> {
     if n_blocks < PRED_MIN_BLOCKS {
         return split_raw(data);
     }
+
+    // LSH index: for each band, map band_signature → list of block indices
+    let mut band_tables: Vec<HashMap<u16, Vec<usize>>> =
+        (0..NUM_BANDS).map(|_| HashMap::new()).collect();
 
     let mut encodings: Vec<BlockEncoding> = Vec::with_capacity(n_blocks);
 
@@ -45,14 +56,25 @@ pub fn build(data: &[u8], fingerprints: &[u64]) -> Vec<BlockEncoding> {
         let block       = &data[block_start..block_end];
         let fp          = fingerprints[block_idx];
 
-        // Find best reference among all PRECEDING blocks
-        let best_ref = (0..block_idx)
-            .map(|ri| {
-                let sim = fingerprint_similarity(fp, fingerprints[ri]);
-                (ri, sim)
-            })
-            .filter(|(_, sim)| *sim >= PRED_SIMILARITY_MIN)
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+        // Collect candidate references from LSH bands
+        let mut best_ref: Option<(usize, f64)> = None;
+        let mut seen = Vec::new(); // avoid re-checking same candidate
+
+        for band in 0..NUM_BANDS {
+            let sig = band_signature(fp, band);
+            if let Some(candidates) = band_tables[band].get(&sig) {
+                for &ri in candidates {
+                    if seen.contains(&ri) { continue; }
+                    seen.push(ri);
+                    let sim = fingerprint_similarity(fp, fingerprints[ri]);
+                    if sim >= PRED_SIMILARITY_MIN {
+                        if best_ref.map_or(true, |(_, s)| sim > s) {
+                            best_ref = Some((ri, sim));
+                        }
+                    }
+                }
+            }
+        }
 
         if let Some((ref_idx, _sim)) = best_ref {
             let ref_start = ref_idx * PRED_BLOCK_SIZE;
@@ -73,6 +95,11 @@ pub fn build(data: &[u8], fingerprints: &[u64]) -> Vec<BlockEncoding> {
             let block_entropy = crate::profile::byte_entropy(block);
 
             if block_entropy - delta_entropy >= PRED_MIN_GAIN {
+                // Insert into LSH index BEFORE pushing (preceding blocks only)
+                for band in 0..NUM_BANDS {
+                    let sig = band_signature(fp, band);
+                    band_tables[band].entry(sig).or_default().push(block_idx);
+                }
                 encodings.push(BlockEncoding::Delta {
                     ref_block: ref_idx as u32,
                     delta,
@@ -80,6 +107,12 @@ pub fn build(data: &[u8], fingerprints: &[u64]) -> Vec<BlockEncoding> {
                 });
                 continue;
             }
+        }
+
+        // Insert into LSH index for future blocks to find
+        for band in 0..NUM_BANDS {
+            let sig = band_signature(fp, band);
+            band_tables[band].entry(sig).or_default().push(block_idx);
         }
 
         // No good reference — store raw
@@ -173,16 +206,100 @@ impl BlockMeta {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/// Estimate similarity between two MinHash fingerprints.
-/// Uses bit-population similarity as a Jaccard proxy.
+/// SimHash cosine similarity: fraction of matching bits.
+/// SimHash is designed so that popcount(a XOR b) / 64 approximates
+/// (1 - cosine_similarity) / 2 for the underlying shingle feature vectors.
+/// We return the fraction of matching bits as the similarity score.
 fn fingerprint_similarity(a: u64, b: u64) -> f64 {
-    let xor      = a ^ b;
-    let matching = 64 - xor.count_ones() as usize;
+    let matching = 64 - (a ^ b).count_ones() as usize;
     matching as f64 / 64.0
+}
+
+/// Extract a 16-bit band signature from a 64-bit SimHash for LSH lookup.
+fn band_signature(hash: u64, band: usize) -> u16 {
+    ((hash >> (band * 16)) & 0xFFFF) as u16
 }
 
 fn split_raw(data: &[u8]) -> Vec<BlockEncoding> {
     data.chunks(PRED_BLOCK_SIZE)
         .map(|c| BlockEncoding::Raw { data: c.to_vec() })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn roundtrip_all_raw() {
+        let data = vec![7u8; PRED_BLOCK_SIZE * 3 + 100];
+        let fps: Vec<u64> = (0..4).map(|i| i as u64 * 0x1234567890).collect();
+        let enc = build(&data, &fps);
+        let out = reconstruct(&enc);
+        assert_eq!(out, data);
+    }
+
+    #[test]
+    fn roundtrip_with_deltas() {
+        // Two identical blocks → delta should be all zeros
+        let block: Vec<u8> = (0..PRED_BLOCK_SIZE).map(|i| (i % 251) as u8).collect();
+        let mut data = block.clone();
+        data.extend_from_slice(&block); // identical second block
+        // Slightly different third block
+        let mut block3 = block.clone();
+        for b in block3.iter_mut().take(100) { *b = b.wrapping_add(1); }
+        data.extend_from_slice(&block3);
+
+        let fps: Vec<u64> = data.chunks(PRED_BLOCK_SIZE)
+            .map(|c| crate::pipeline::simhash_block(c))
+            .collect();
+        let enc = build(&data, &fps);
+        let out = reconstruct(&enc);
+        assert_eq!(out, data);
+    }
+
+    #[test]
+    fn roundtrip_too_few_blocks() {
+        let data = vec![42u8; PRED_BLOCK_SIZE / 2];
+        let fps = vec![0u64];
+        let enc = build(&data, &fps);
+        let out = reconstruct(&enc);
+        assert_eq!(out, data);
+    }
+
+    #[test]
+    fn flatten_roundtrip() {
+        let data = vec![0xABu8; PRED_BLOCK_SIZE * 2];
+        let fps = vec![0u64, 1u64];
+        let enc = build(&data, &fps);
+        let (payload, metas) = flatten_for_packing(&enc);
+        // Verify metas can serialize/deserialize
+        for m in &metas {
+            let bytes = m.serialize();
+            let m2 = BlockMeta::deserialize(&bytes).unwrap();
+            assert_eq!(m.block_idx, m2.block_idx);
+            assert_eq!(m.is_delta, m2.is_delta);
+            assert_eq!(m.len, m2.len);
+        }
+        assert!(!payload.is_empty());
+    }
+
+    #[test]
+    fn simhash_identical_blocks_match() {
+        let block: Vec<u8> = (0..PRED_BLOCK_SIZE).map(|i| (i * 7 % 256) as u8).collect();
+        let fp1 = crate::pipeline::simhash_block(&block);
+        let fp2 = crate::pipeline::simhash_block(&block);
+        assert_eq!(fp1, fp2);
+        assert_eq!(fingerprint_similarity(fp1, fp2), 1.0);
+    }
+
+    #[test]
+    fn simhash_different_blocks_diverge() {
+        let block1: Vec<u8> = (0..PRED_BLOCK_SIZE).map(|i| (i % 256) as u8).collect();
+        let block2: Vec<u8> = (0..PRED_BLOCK_SIZE).map(|i| ((i * 137 + 42) % 256) as u8).collect();
+        let fp1 = crate::pipeline::simhash_block(&block1);
+        let fp2 = crate::pipeline::simhash_block(&block2);
+        let sim = fingerprint_similarity(fp1, fp2);
+        assert!(sim < 0.9, "expected different blocks to have low similarity, got {}", sim);
+    }
 }

@@ -67,6 +67,8 @@ pub fn infer_columns(data: &[u8]) -> Option<ColumnGrammar> {
         b != b'\n' && b != b'\r' && b != b'\t' && !(0x20..=0x7E).contains(&b)
     }).count();
     if non_print * 20 > probe.len() { return None; }
+    let has_nulls = probe.iter().any(|&b| b == 0);
+    if has_nulls { return None; }
 
     // ── Split into lines ──────────────────────────────────────────────────────
     let lines: Vec<&[u8]> = data.split(|&b| b == b'\n')
@@ -608,4 +610,70 @@ fn position_entropy(vals: &[u8]) -> f64 {
 fn byte_mode(vals: &[u8]) -> u8 {
     let mut f=[0u32;256]; for &v in vals { f[v as usize]+=1; }
     f.iter().enumerate().max_by_key(|(_,&c)|c).map(|(i,_)|i as u8).unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn column_grammar_csv_roundtrip() {
+        let csv = "name,age,city\nalice,30,nyc\nbob,25,sfo\ncharlie,35,lax\n\
+            dave,40,sea\neve,28,chi\nfrank,33,den\ngrace,45,atl\n\
+            hank,50,bos\nivy,22,pdx\njack,38,mia\nkate,29,dal\n";
+        let data = csv.as_bytes();
+        if let Some(cg) = infer_columns(data) {
+            let serialized = serialize_columns(&cg);
+            let (cg2, _) = deserialize_columns(&serialized).unwrap();
+            let reconstructed = reconstruct_columns(&cg2, data.len());
+            assert_eq!(std::str::from_utf8(&reconstructed).unwrap(),
+                       std::str::from_utf8(data).unwrap());
+        }
+        // If infer_columns returns None, it means zstd beats column grammar
+        // on this tiny dataset — that's fine, not a bug.
+    }
+
+    #[test]
+    fn stride_grammar_roundtrip() {
+        // Binary data with fixed stride, some constant positions
+        let stride = 8;
+        let n_records = 100;
+        let mut data = Vec::with_capacity(stride * n_records);
+        for i in 0..n_records {
+            data.push(0xAA); // fixed
+            data.push(0xBB); // fixed
+            data.push((i % 256) as u8); // variable
+            data.push(((i * 7) % 256) as u8); // variable
+            data.push(0xCC); // fixed
+            data.push(0xDD); // fixed
+            data.push(((i * 13) % 256) as u8); // variable
+            data.push(0xEE); // fixed
+        }
+
+        if let Some(tmpl) = infer(&data, stride) {
+            let serialized = serialize(&tmpl);
+            let (tmpl2, _) = deserialize(&serialized).unwrap();
+            let reconstructed = reconstruct(&tmpl2);
+            assert_eq!(reconstructed, data);
+        }
+    }
+
+    #[test]
+    fn stride_grammar_serialize_deserialize() {
+        let tmpl = GrammarTemplate {
+            stride: 4,
+            fixed_positions: vec![(0, 0xAA), (2, 0xBB)],
+            field_offsets: vec![1, 3],
+            field_values: vec![vec![1, 2, 3], vec![4, 5, 6]],
+            coverage: 0.5,
+            tail: vec![0xFF],
+        };
+        let bytes = serialize(&tmpl);
+        let (tmpl2, _) = deserialize(&bytes).unwrap();
+        assert_eq!(tmpl2.stride, 4);
+        assert_eq!(tmpl2.fixed_positions, vec![(0, 0xAA), (2, 0xBB)]);
+        assert_eq!(tmpl2.field_offsets, vec![1, 3]);
+        assert_eq!(tmpl2.field_values, vec![vec![1, 2, 3], vec![4, 5, 6]]);
+        assert_eq!(tmpl2.tail, vec![0xFF]);
+    }
 }

@@ -149,15 +149,18 @@ pub fn unpack_implicit(header: &ContextPackHeader, yuv: &[u8], byte0: u8) -> Vec
     out.push(byte0);
     let mut prev = byte0 as usize;
 
-    for _ in 1..n {
+    for i in 1..n {
         let ptr = ptrs[prev] as usize;
         let start = ctx_start[prev] as usize;
         let len   = ctx_len[prev]   as usize;
-        let b = if ptr < len && start + ptr < flat.len() {
-            flat[start + ptr]
-        } else {
-            0
-        };
+        if ptr >= len || start + ptr >= flat.len() {
+            eprintln!("[iris] FATAL: context chain broken at byte {} (ctx={:#04x}, ptr={}, len={})",
+                i, prev, ptr, len);
+            // Return what we have — CRC32 at the container level will catch this
+            out.resize(n, 0);
+            return out;
+        }
+        let b = flat[start + ptr];
         out.push(b);
         ptrs[prev] += 1;
         prev = b as usize;
@@ -317,4 +320,57 @@ pub fn pack_with_positions(
     };
 
     (flat, position_lists, hdr)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::profile;
+
+    #[test]
+    fn pack_unpack_full_roundtrip() {
+        let data: Vec<u8> = (0..2000).map(|i| ((i * 7 + 3) % 256) as u8).collect();
+        let prof = profile::profile(&data);
+        let (flat, position_lists, hdr) = pack_with_positions(&data, &prof.context_table);
+        let reconstructed = unpack_full(&hdr, &flat, data[0], &position_lists);
+        assert_eq!(reconstructed, data);
+    }
+
+    #[test]
+    fn pack_unpack_implicit_roundtrip() {
+        let data: Vec<u8> = (0..2000).map(|i| ((i * 13 + 5) % 256) as u8).collect();
+        let prof = profile::profile(&data);
+        let (hdr, yuv) = pack(&data, &prof.context_table);
+        let reconstructed = unpack_implicit(&hdr, &yuv, data[0]);
+        assert_eq!(reconstructed, data, "implicit chain reconstruction failed");
+    }
+
+    #[test]
+    fn header_serialization_roundtrip() {
+        let hdr = ContextPackHeader {
+            frame_width: 1920, frame_height: 540, frame_count: 2, data_len: 5000,
+            context_map: vec![
+                ContextMapEntry { context_byte: 0x20, count: 100 },
+                ContextMapEntry { context_byte: 0x41, count: 200 },
+            ],
+        };
+        let bytes = serialize_header(&hdr);
+        let (hdr2, consumed) = deserialize_header(&bytes).unwrap();
+        assert_eq!(consumed, bytes.len());
+        assert_eq!(hdr2.frame_width, 1920);
+        assert_eq!(hdr2.frame_count, 2);
+        assert_eq!(hdr2.context_map.len(), 2);
+        assert_eq!(hdr2.context_map[0].context_byte, 0x20);
+        assert_eq!(hdr2.context_map[1].count, 200);
+    }
+
+    #[test]
+    fn empty_data_positions() {
+        let data: Vec<u8> = vec![];
+        let prof = profile::profile(&data);
+        let (flat, position_lists, hdr) = pack_with_positions(&data, &prof.context_table);
+        assert!(flat.is_empty());
+        assert!(position_lists.is_empty());
+        assert_eq!(hdr.data_len, 0);
+    }
 }

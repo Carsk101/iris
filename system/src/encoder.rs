@@ -1,28 +1,32 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 use anyhow::{Result, Context, bail};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Encoder { Av1Nvenc, HevcNvenc, LibX264 }
 
 impl Encoder {
-    pub fn container(self) -> &'static str { "matroska" }
     pub fn to_u8(self)  -> u8 { match self { Encoder::Av1Nvenc=>0, Encoder::HevcNvenc=>1, Encoder::LibX264=>2 } }
     pub fn from_u8(v: u8) -> Self { match v { 0=>Encoder::Av1Nvenc, 1=>Encoder::HevcNvenc, _=>Encoder::LibX264 } }
     pub fn label(self) -> &'static str { match self { Encoder::Av1Nvenc=>"av1_nvenc", Encoder::HevcNvenc=>"hevc_nvenc", Encoder::LibX264=>"libx264" } }
 }
 
-/// Runtime probe — actually test-encode a frame. libsvtav1 -crf 0 is NOT lossless.
+static DETECTED_ENCODER: OnceLock<Encoder> = OnceLock::new();
+
+/// Runtime probe — cached after first call via OnceLock.
 /// Probe order: av1_nvenc → hevc_nvenc → libx264 -qp 0 (guaranteed lossless).
 pub fn detect() -> Encoder {
-    if probe_nvenc("av1_nvenc",  &["-tune","lossless","-rc","constqp","-qp","0"]) {
-        eprintln!("[iris] encoder: av1_nvenc (RTX 4000+)"); return Encoder::Av1Nvenc;
-    }
-    if probe_nvenc("hevc_nvenc", &["-tune","lossless","-rc","constqp","-qp","0"]) {
-        eprintln!("[iris] encoder: hevc_nvenc (RTX 3000)"); return Encoder::HevcNvenc;
-    }
-    eprintln!("[iris] encoder: libx264 -qp 0 (CPU lossless fallback)");
-    Encoder::LibX264
+    *DETECTED_ENCODER.get_or_init(|| {
+        if probe_nvenc("av1_nvenc",  &["-tune","lossless","-rc","constqp","-qp","0"]) {
+            eprintln!("[iris] encoder: av1_nvenc (RTX 4000+)"); return Encoder::Av1Nvenc;
+        }
+        if probe_nvenc("hevc_nvenc", &["-tune","lossless","-rc","constqp","-qp","0"]) {
+            eprintln!("[iris] encoder: hevc_nvenc (RTX 3000)"); return Encoder::HevcNvenc;
+        }
+        eprintln!("[iris] encoder: libx264 -qp 0 (CPU lossless fallback)");
+        Encoder::LibX264
+    })
 }
 
 fn probe_nvenc(codec: &str, extra: &[&str]) -> bool {

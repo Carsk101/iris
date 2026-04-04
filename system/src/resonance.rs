@@ -107,3 +107,45 @@ fn byte_variance(data: &[u8]) -> f64 {
     let mean = sum as f64 / n as f64;
     sum2 as f64 / n as f64 - mean * mean
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::profile::ResonanceLag;
+
+    #[test]
+    fn roundtrip_periodic_data() {
+        // Data with strong period-4 pattern
+        let data: Vec<u8> = (0..2048).map(|i| match i % 4 {
+            0 => 0x10, 1 => 0x20, 2 => 0x30, _ => 0x40,
+        }).collect();
+        let lags = vec![ResonanceLag { lag: 4, strength: 0.9 }];
+        let (hdr, residual) = extract(&data, &lags).expect("should extract resonance");
+        let reconstructed = reconstruct(&hdr, &residual);
+        assert_eq!(reconstructed, data);
+    }
+
+    #[test]
+    fn roundtrip_header_serialization() {
+        let hdr = ResonanceHeader {
+            lag: 8, strength: 0.75,
+            prefix: vec![1, 2, 3, 4, 5, 6, 7, 8],
+        };
+        let bytes = serialize_header(&hdr);
+        let (hdr2, consumed) = deserialize_header(&bytes).unwrap();
+        assert_eq!(consumed, bytes.len());
+        assert_eq!(hdr2.lag, 8);
+        assert_eq!(hdr2.prefix, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn no_resonance_on_random_data() {
+        let data: Vec<u8> = (0..2048).map(|i| ((i * 137 + 42) % 256) as u8).collect();
+        let lags = vec![ResonanceLag { lag: 4, strength: 0.3 }];
+        // May or may not extract — if it does, roundtrip must hold
+        if let Some((hdr, residual)) = extract(&data, &lags) {
+            let reconstructed = reconstruct(&hdr, &residual);
+            assert_eq!(reconstructed, data);
+        }
+    }
+}

@@ -86,9 +86,7 @@ pub fn profile(data: &[u8]) -> CompressionProfile {
     let mut running_surprise = 0.5f64;
     let mut prev_byte = data[0] as f64 / 255.0;
 
-    let mut block_hash: u64 = 0;
-    let mut block_bytes = 0usize;
-    let mut lcg: u64 = 0xdeadbeef_cafebabe ^ n as u64;
+    let mut block_start = 1usize; // profile fingerprints start at byte 1
 
     for i in 1..n {
         let byte = data[i];
@@ -111,12 +109,16 @@ pub fn profile(data: &[u8]) -> CompressionProfile {
         running_surprise = running_surprise * 0.995 + surprise * 0.005;
         prev_byte = actual;
 
-        lcg = lcg.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-        block_hash = block_hash.wrapping_add(lcg ^ byte as u64);
-        block_bytes += 1;
-        if block_bytes >= BLOCK_SIZE || i == n - 1 {
-            fps.push(block_hash);
-            block_hash = 0; block_bytes = 0;
+        if (i - block_start + 1) >= BLOCK_SIZE || i == n - 1 {
+            // Profile fingerprints are only used for gate decisions (block count),
+            // not for similarity. Push a simple hash for counting purposes.
+            let mut h: u64 = 0xcbf29ce484222325;
+            for &b in &data[block_start..=i] {
+                h ^= b as u64;
+                h = h.wrapping_mul(0x100000001b3);
+            }
+            fps.push(h);
+            block_start = i + 1;
         }
     }
 

@@ -1,9 +1,9 @@
-/// iris v2 container — varint-delta scatter encoding
+/// iris v2 container — varint-delta scatter encoding + CRC32 integrity
 use std::io::{Read, Write};
 use anyhow::{Result, bail};
 
 pub const MAGIC:   &[u8; 4] = b"IRS2";
-pub const VERSION: u8       = 2;
+pub const VERSION: u8       = 3;  // bumped: CRC32 trailer added
 pub const FLAG_RESONANCE:    u8 = 0b0001;
 pub const FLAG_GRAMMAR:      u8 = 0b0010;
 pub const FLAG_PRED_GRAPH:   u8 = 0b0100;
@@ -34,22 +34,35 @@ impl IrisContainer {
         w.write_all(&[VERSION, self.encoder, self.flags, 0u8])?;
         w.write_all(&self.original_len.to_le_bytes())?;
         w.write_all(&[self.byte0, self.original_byte0])?;
+
+        // Collect all chunk data to compute CRC32 over payloads
+        let mut payload_buf = Vec::new();
         for chunk in &[&self.resonance_hdr, &self.grammar_data, &self.pred_meta,
                        &self.scatter_map, &self.ctx_hdr, &self.video] {
-            write_chunk(w, chunk)?;
+            let len_bytes = (chunk.len() as u32).to_le_bytes();
+            payload_buf.extend_from_slice(&len_bytes);
+            payload_buf.extend_from_slice(chunk);
         }
+
+        w.write_all(&payload_buf)?;
+
+        // CRC32 trailer over all chunk data
+        let crc = crc32fast::hash(&payload_buf);
+        w.write_all(&crc.to_le_bytes())?;
         Ok(())
     }
 
     pub fn read<R: Read>(r: &mut R) -> Result<Self> {
         let mut magic = [0u8; 4]; r.read_exact(&mut magic)?;
-        if &magic != MAGIC { bail!("not an iris v2 file"); }
+        if &magic != MAGIC { bail!("not an iris file"); }
         let mut hdr = [0u8; 4]; r.read_exact(&mut hdr)?;
-        if hdr[0] != VERSION { bail!("unsupported version {}", hdr[0]); }
+        let version = hdr[0];
+        if version != VERSION && version != 2 { bail!("unsupported version {}", version); }
         let mut lb = [0u8; 8]; r.read_exact(&mut lb)?;
         let original_len = u64::from_le_bytes(lb);
         let mut b = [0u8; 2]; r.read_exact(&mut b)?;
-        Ok(Self {
+
+        let container = Self {
             encoder: hdr[1], flags: hdr[2], original_len,
             byte0: b[0], original_byte0: b[1],
             resonance_hdr: read_chunk(r)?,
@@ -58,14 +71,31 @@ impl IrisContainer {
             scatter_map:   read_chunk(r)?,
             ctx_hdr:       read_chunk(r)?,
             video:         read_chunk(r)?,
-        })
-    }
-}
+        };
 
-fn write_chunk<W: Write>(w: &mut W, d: &[u8]) -> Result<()> {
-    w.write_all(&(d.len() as u32).to_le_bytes())?;
-    if !d.is_empty() { w.write_all(d)?; }
-    Ok(())
+        // Verify CRC32 if version >= 3
+        if version >= 3 {
+            let mut crc_buf = [0u8; 4];
+            r.read_exact(&mut crc_buf)?;
+            let stored_crc = u32::from_le_bytes(crc_buf);
+
+            // Recompute CRC over chunk data
+            let mut payload_buf = Vec::new();
+            for chunk in &[&container.resonance_hdr, &container.grammar_data,
+                           &container.pred_meta, &container.scatter_map,
+                           &container.ctx_hdr, &container.video] {
+                payload_buf.extend_from_slice(&(chunk.len() as u32).to_le_bytes());
+                payload_buf.extend_from_slice(chunk);
+            }
+            let computed_crc = crc32fast::hash(&payload_buf);
+            if stored_crc != computed_crc {
+                bail!("CRC32 mismatch: container is corrupt (stored={:#010x}, computed={:#010x})",
+                    stored_crc, computed_crc);
+            }
+        }
+
+        Ok(container)
+    }
 }
 
 fn read_chunk<R: Read>(r: &mut R) -> Result<Vec<u8>> {
@@ -160,3 +190,98 @@ pub fn deserialize_pred_meta(data: &[u8]) -> Option<Vec<crate::prediction::Block
 }
 
 pub const FLAG_COLUMNAR: u8 = 0b0001_0000;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn container_roundtrip() {
+        let c = IrisContainer {
+            encoder: 0xFF, flags: FLAG_RESONANCE | FLAG_CONTEXT_PACK,
+            original_len: 12345, byte0: 0xAB, original_byte0: 0xCD,
+            resonance_hdr: vec![1, 2, 3],
+            grammar_data: vec![],
+            pred_meta: vec![4, 5, 6, 7],
+            scatter_map: vec![8, 9],
+            ctx_hdr: vec![10, 11, 12, 13, 14],
+            video: vec![0xFF; 100],
+        };
+        let mut buf = Vec::new();
+        c.write(&mut buf).unwrap();
+
+        let c2 = IrisContainer::read(&mut Cursor::new(&buf)).unwrap();
+        assert_eq!(c2.encoder, 0xFF);
+        assert_eq!(c2.flags, FLAG_RESONANCE | FLAG_CONTEXT_PACK);
+        assert_eq!(c2.original_len, 12345);
+        assert_eq!(c2.byte0, 0xAB);
+        assert_eq!(c2.original_byte0, 0xCD);
+        assert_eq!(c2.resonance_hdr, vec![1, 2, 3]);
+        assert_eq!(c2.grammar_data, vec![]);
+        assert_eq!(c2.pred_meta, vec![4, 5, 6, 7]);
+        assert_eq!(c2.scatter_map, vec![8, 9]);
+        assert_eq!(c2.ctx_hdr, vec![10, 11, 12, 13, 14]);
+        assert_eq!(c2.video, vec![0xFF; 100]);
+    }
+
+    #[test]
+    fn container_crc_detects_corruption() {
+        let c = IrisContainer {
+            encoder: 0xFF, flags: 0,
+            original_len: 100, byte0: 0, original_byte0: 0,
+            resonance_hdr: vec![], grammar_data: vec![],
+            pred_meta: vec![], scatter_map: vec![],
+            ctx_hdr: vec![], video: vec![42; 50],
+        };
+        let mut buf = Vec::new();
+        c.write(&mut buf).unwrap();
+
+        // Corrupt a byte in the video payload
+        let len = buf.len();
+        buf[len - 10] ^= 0xFF;
+
+        let result = IrisContainer::read(&mut Cursor::new(&buf));
+        assert!(result.is_err(), "should detect CRC corruption");
+    }
+
+    #[test]
+    fn scatter_roundtrip() {
+        let lists = vec![
+            vec![1, 5, 10, 100, 1000],
+            vec![2, 3, 4],
+            vec![0, 50000],
+        ];
+        let serialized = serialize_scatter(&lists).unwrap();
+        let deserialized = deserialize_scatter(&serialized).unwrap();
+        assert_eq!(deserialized, lists);
+    }
+
+    #[test]
+    fn scatter_empty() {
+        let lists: Vec<Vec<u32>> = vec![];
+        let serialized = serialize_scatter(&lists).unwrap();
+        let deserialized = deserialize_scatter(&serialized).unwrap();
+        assert_eq!(deserialized, lists);
+    }
+
+    #[test]
+    fn pred_meta_roundtrip() {
+        let metas = vec![
+            crate::prediction::BlockMeta {
+                block_idx: 0, is_delta: false, ref_block: 0, offset: 0, len: 4096,
+            },
+            crate::prediction::BlockMeta {
+                block_idx: 1, is_delta: true, ref_block: 0, offset: 4096, len: 4096,
+            },
+        ];
+        let bytes = serialize_pred_meta(&metas);
+        let metas2 = deserialize_pred_meta(&bytes).unwrap();
+        assert_eq!(metas2.len(), 2);
+        assert_eq!(metas2[0].block_idx, 0);
+        assert!(!metas2[0].is_delta);
+        assert_eq!(metas2[1].block_idx, 1);
+        assert!(metas2[1].is_delta);
+        assert_eq!(metas2[1].ref_block, 0);
+    }
+}

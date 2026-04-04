@@ -1,5 +1,4 @@
 mod profile;
-mod columnar;
 mod resonance;
 mod grammar;
 mod prediction;

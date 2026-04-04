@@ -8,10 +8,9 @@ use crate::resonance;
 use crate::grammar;
 use crate::prediction;
 use crate::context_pack;
-use crate::columnar;
 use crate::encoder::{self, Encoder};
 use crate::container::{self, IrisContainer,
-    FLAG_RESONANCE, FLAG_GRAMMAR, FLAG_PRED_GRAPH, FLAG_CONTEXT_PACK, FLAG_COLUMNAR};
+    FLAG_RESONANCE, FLAG_GRAMMAR, FLAG_PRED_GRAPH, FLAG_CONTEXT_PACK};
 
 const ZSTD_ROUTE_ENTROPY:      f64 = 0.80;
 const ULTRA_COMPRESS_ENTROPY:  f64 = 0.15;
@@ -354,17 +353,61 @@ fn write_passthrough(data: &[u8], output: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Compute SimHash fingerprints for each block.
+/// SimHash: for each 4-byte shingle in the block, hash to u64 and accumulate
+/// a 64-dimensional signed weight vector. Final fingerprint = sign bits.
+/// This correctly approximates cosine similarity via Hamming distance.
 fn compute_fingerprints(data: &[u8], block_size: usize) -> Vec<u64> {
-    let mut fps = Vec::new();
-    let mut hash: u64 = 0xdeadbeef_cafebabe;
-    let mut count = 0usize;
-    for &b in data {
-        hash = hash.wrapping_mul(6364136223846793005).wrapping_add(b as u64 ^ 1442695040888963407);
-        count += 1;
-        if count >= block_size { fps.push(hash); hash = 0; count = 0; }
+    let n_blocks = (data.len() + block_size - 1) / block_size;
+    let mut fps = Vec::with_capacity(n_blocks);
+
+    for block_start in (0..data.len()).step_by(block_size) {
+        let block_end = (block_start + block_size).min(data.len());
+        let block = &data[block_start..block_end];
+        fps.push(simhash_block(block));
     }
-    if count > 0 { fps.push(hash); }
     fps
+}
+
+/// SimHash of a single block using 4-byte shingles.
+pub fn simhash_block(block: &[u8]) -> u64 {
+    let mut weights = [0i32; 64];
+
+    if block.len() < 4 {
+        // Too short for shingles — hash the raw bytes
+        let mut h: u64 = 0xcbf29ce484222325;
+        for &b in block {
+            h ^= b as u64;
+            h = h.wrapping_mul(0x100000001b3);
+        }
+        return h;
+    }
+
+    for window in block.windows(4) {
+        // FNV-1a hash of the 4-byte shingle → 64-bit feature hash
+        let mut h: u64 = 0xcbf29ce484222325;
+        for &b in window {
+            h ^= b as u64;
+            h = h.wrapping_mul(0x100000001b3);
+        }
+        // Accumulate: each set bit adds +1, each clear bit adds -1
+        for bit in 0..64 {
+            if (h >> bit) & 1 == 1 {
+                weights[bit] += 1;
+            } else {
+                weights[bit] -= 1;
+            }
+        }
+    }
+
+    // Final fingerprint: sign bits
+    let mut fp: u64 = 0;
+    for bit in 0..64 {
+        if weights[bit] > 0 {
+            fp |= 1u64 << bit;
+        }
+    }
+    fp
 }
 
 fn rebuild_from_pred(working: &[u8], metas: &[crate::prediction::BlockMeta]) -> Vec<u8> {
