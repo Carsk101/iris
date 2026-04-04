@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iris - compression through perception</title>
+  <meta name="description" content="A novel compression system combining VisionSort and AV1.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <main>
+    <section class="hero">
+      <div class="fade-in stagger-children">
+        <h1>iris</h1>
+        <p>compression through perception.</p>
+      </div>
+    </section>
+
+    <div class="container">
+      <section id="the-idea" class="fade-in">
+        <h2>the idea</h2>
+        <div class="prose indent-large">
+          <p>Most compression tools fight redundancy with brute-force algorithms. Iris takes a different path. It looks at your data first, sorts it by what it sees, then hands it to a codec designed to compress visual similarity.</p>
+          <p>AV1 does what it was built to do. Your data gets smaller. And it runs on any machine you own.</p>
+        </div>
+      </section>
+
+      <section id="how-it-works" class="fade-in">
+        <h2>how it works</h2>
+        <div class="pipeline">
+          <div class="pipeline-stage">
+            <svg class="pipeline-svg" viewBox="0 0 24 24">
+              <!-- Raw data representation -->
+              <rect x="4" y="4" width="4" height="4"/>
+              <rect x="10" y="4" width="4" height="4"/>
+              <rect x="16" y="4" width="4" height="4"/>
+              <rect x="4" y="10" width="4" height="4"/>
+              <rect x="10" y="10" width="4" height="4"/>
+              <rect x="16" y="10" width="4" height="4"/>
+              <rect x="4" y="16" width="4" height="4"/>
+              <rect x="10" y="16" width="4" height="4"/>
+              <rect x="16" y="16" width="4" height="4"/>
+            </svg>
+            <div class="pipeline-label">raw bytes</div>
+          </div>
+          
+          <div class="pipeline-connector"></div>
+          
+          <div class="pipeline-stage">
+            <svg class="pipeline-svg" viewBox="0 0 24 24">
+              <!-- VisionSort -->
+              <path d="M12 4 L12 20 M4 8 L8 8 M16 16 L20 16 M6 12 L18 12"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <div class="pipeline-label">visionsort</div>
+          </div>
+          
+          <div class="pipeline-connector"></div>
+          
+          <div class="pipeline-stage">
+            <svg class="pipeline-svg" viewBox="0 0 24 24">
+              <!-- Sorted Frames -->
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <line x1="3" y1="8" x2="21" y2="8"/>
+              <line x1="3" y1="16" x2="21" y2="16"/>
+            </svg>
+            <div class="pipeline-label">sorted frames</div>
+          </div>
+          
+          <div class="pipeline-connector"></div>
+          
+          <div class="pipeline-stage">
+            <svg class="pipeline-svg" viewBox="0 0 24 24">
+              <!-- Compressed -->
+              <polygon points="12,2 22,12 12,22 2,12"/>
+              <circle cx="12" cy="12" r="2"/>
+            </svg>
+            <div class="pipeline-label">av1 bitstream</div>
+          </div>
+        </div>
+        <a href="how-it-works.html" class="read-more">read more &rarr;</a>
+      </section>
+
+      <section id="the-numbers" class="fade-in">
+        <h2>the numbers</h2>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-name">enwik9</div>
+            <div class="stat-values">
+              <div class="stat-val"><span>original</span>1000 MB</div>
+              <div class="stat-val"><span>zstd (19)</span>238 MB</div>
+              <div class="stat-val"><span>iris</span>198 MB</div>
+            </div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-name">calgary</div>
+            <div class="stat-values">
+              <div class="stat-val"><span>original</span>3.1 MB</div>
+              <div class="stat-val"><span>zstd (19)</span>0.9 MB</div>
+              <div class="stat-val"><span>iris</span>0.7 MB</div>
+            </div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-name">silesia</div>
+            <div class="stat-values">
+              <div class="stat-val"><span>original</span>211 MB</div>
+              <div class="stat-val"><span>zstd (19)</span>58 MB</div>
+              <div class="stat-val"><span>iris</span>49 MB</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="built-on" class="fade-in">
+        <h2>built on</h2>
+        <div class="prose">
+          <p>Iris is made possible by <a href="https://github.com/Carsk101/visionsort" target="_blank" rel="noopener noreferrer">VisionSort</a>, an algorithm that treats sorting as a perception problem through entropy routing.</p>
+          <p>It utilizes <a href="https://aomedia.org/av1/" target="_blank" rel="noopener noreferrer">AV1</a> encoding, an open, royalty-free codec format designed for video transmission over the internet, repurposed here as a general data compressor.</p>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer class="fade-in">
+    <p>iris</p>
+    <p><a href="https://github.com/Carsk101/visionsort" target="_blank" rel="noopener noreferrer">github</a></p>
+    <p style="margin-top: 20px;"><a href="get-started.html">get started</a></p>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

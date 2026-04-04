@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>get started - iris</title>
+  <meta name="description" content="Download and install the Iris compression system.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <header class="fade-in">
+    <div class="logo"><a href="index.html">iris</a></div>
+    <nav>
+      <a href="index.html">home</a>
+      <a href="how-it-works.html">how it works</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="fade-in">
+      <h2>installation</h2>
+      <div class="prose indent-large">
+        <p>Iris is built in Rust and uses AV1 for software-based encoding. The easiest way to install it is via cargo.</p>
+        
+<pre><code>cargo install iris-cli</code></pre>
+
+        <p>Alternatively, you can download pre-compiled binaries for Mac, Linux, and Windows from our <a href="https://github.com/Carsk101/visionsort/releases" target="_blank">releases page</a>.</p>
+      </div>
+    </section>
+
+    <section class="fade-in">
+      <h2>usage</h2>
+      <div class="prose">
+        <p>The CLI is designed to be as minimal and straightforward as the algorithm itself.</p>
+        
+        <h3>compressing data</h3>
+<pre><code>iris compress input.bin output.iris</code></pre>
+
+        <h3>decompressing data</h3>
+<pre><code>iris decompress output.iris original.bin</code></pre>
+      </div>
+    </section>
+
+    <section class="fade-in">
+      <h2>system requirements</h2>
+      <div class="prose indent-large">
+        <p>Any modern machine. By using AV1 software encoding (like SVT-AV1) instead of hardware-specific solutions, iris avoids tying you to a specific vendor pool.</p>
+        <p>It runs on Mac, Linux, Windows, AMD, Intel, and Apple Silicon. No GPU is required. If your machine can surf the modern web, it can run iris.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="fade-in">
+    <p>iris</p>
+    <p><a href="https://github.com/Carsk101/visionsort" target="_blank" rel="noopener noreferrer">github</a></p>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
