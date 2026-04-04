@@ -1,6 +1,22 @@
-/// iris v2 container — varint-delta scatter encoding + CRC32 integrity
+/// iris container — varint-delta scatter encoding + CRC32 integrity
 use std::io::{Read, Write};
 use anyhow::{Result, bail};
+
+/// Native CRC32 (IEEE 802.3 polynomial, same as crc32fast/zlib)
+fn crc32(data: &[u8]) -> u32 {
+    let mut crc: u32 = 0xFFFF_FFFF;
+    for &byte in data {
+        crc ^= byte as u32;
+        for _ in 0..8 {
+            if crc & 1 != 0 {
+                crc = (crc >> 1) ^ 0xEDB88320;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    !crc
+}
 
 pub const MAGIC:   &[u8; 4] = b"IRS2";
 pub const VERSION: u8       = 3;  // bumped: CRC32 trailer added
@@ -47,7 +63,7 @@ impl IrisContainer {
         w.write_all(&payload_buf)?;
 
         // CRC32 trailer over all chunk data
-        let crc = crc32fast::hash(&payload_buf);
+        let crc = crc32(&payload_buf);
         w.write_all(&crc.to_le_bytes())?;
         Ok(())
     }
@@ -87,7 +103,7 @@ impl IrisContainer {
                 payload_buf.extend_from_slice(&(chunk.len() as u32).to_le_bytes());
                 payload_buf.extend_from_slice(chunk);
             }
-            let computed_crc = crc32fast::hash(&payload_buf);
+            let computed_crc = crc32(&payload_buf);
             if stored_crc != computed_crc {
                 bail!("CRC32 mismatch: container is corrupt (stored={:#010x}, computed={:#010x})",
                     stored_crc, computed_crc);
@@ -145,14 +161,15 @@ pub fn serialize_scatter(lists: &[Vec<u32>]) -> Result<Vec<u8>> {
         }
     }
     eprintln!("[iris] scatter varint: {}B", varint_buf.len());
-    let compressed = zstd::encode_all(std::io::Cursor::new(&varint_buf), 22)?;
-    eprintln!("[iris] scatter zstd:   {}B", compressed.len());
+    let compressed = crate::range_coder::encode(&varint_buf);
+    eprintln!("[iris] scatter range:  {}B", compressed.len());
     Ok(compressed)
 }
 
 pub fn deserialize_scatter(compressed: &[u8]) -> Result<Vec<Vec<u32>>> {
     if compressed.is_empty() { return Ok(vec![]); }
-    let raw = zstd::decode_all(std::io::Cursor::new(compressed))?;
+    let raw = crate::range_coder::decode(compressed)
+        .ok_or_else(|| anyhow::anyhow!("corrupt scatter map"))?;
     let mut pos = 0;
     let n_lists = read_varint(&raw, &mut pos).unwrap_or(0) as usize;
     let mut lists = Vec::with_capacity(n_lists);
@@ -189,7 +206,6 @@ pub fn deserialize_pred_meta(data: &[u8]) -> Option<Vec<crate::prediction::Block
     Some(metas)
 }
 
-pub const FLAG_COLUMNAR: u8 = 0b0001_0000;
 
 #[cfg(test)]
 mod tests {

@@ -521,10 +521,10 @@ fn decode_spec(spec: &ColSpec, n_rows: usize) -> Vec<Vec<u8>> {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 fn zstd_enc(d: &[u8]) -> Vec<u8> {
-    zstd::encode_all(std::io::Cursor::new(d), 22).unwrap_or_default()
+    crate::range_coder::encode(d)
 }
 fn zstd_dec(d: &[u8]) -> Vec<u8> {
-    zstd::decode_all(std::io::Cursor::new(d)).unwrap_or_default()
+    crate::range_coder::decode(d).unwrap_or_default()
 }
 
 fn push_u32(out: &mut Vec<u8>, v: u32) { out.extend_from_slice(&v.to_le_bytes()); }

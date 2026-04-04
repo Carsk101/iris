@@ -8,7 +8,6 @@ use crate::resonance;
 use crate::grammar;
 use crate::prediction;
 use crate::context_pack;
-use crate::encoder::{self, Encoder};
 use crate::container::{self, IrisContainer,
     FLAG_RESONANCE, FLAG_GRAMMAR, FLAG_PRED_GRAPH, FLAG_CONTEXT_PACK};
 
@@ -144,28 +143,22 @@ pub fn compress(input: &Path, output: &Path) -> Result<()> {
     let working_entropy2 = profile::byte_entropy(&working);
 
     // ── Stage 4+5: Route ─────────────────────────────────────────────────
-    let video_payload; let scatter_bytes; let ctx_hdr_bytes; let is_av1; let enc;
+    let video_payload; let scatter_bytes; let ctx_hdr_bytes; let encoder_byte: u8;
 
     if working_entropy2 < ULTRA_COMPRESS_ENTROPY {
-        eprintln!("[iris] ultra-compress: bzip2 (H={:.3})", working_entropy2);
-        use bzip2::Compression;
-        use bzip2::read::BzEncoder as BzEnc;
-        use std::io::Read;
-        let mut bz = BzEnc::new(std::io::Cursor::new(&working), Compression::best());
-        let mut compressed = Vec::new();
-        bz.read_to_end(&mut compressed)?;
-        eprintln!("[iris] bzip2: {}B → {}B ({:.1}x)",
+        eprintln!("[iris] ultra-compress: range coder (H={:.3})", working_entropy2);
+        let compressed = crate::range_coder::encode(&working);
+        eprintln!("[iris] range: {}B → {}B ({:.1}x)",
             working.len(), compressed.len(),
-            working.len() as f64 / compressed.len() as f64);
+            working.len() as f64 / compressed.len().max(1) as f64);
         video_payload  = compressed;
         scatter_bytes  = vec![];
         ctx_hdr_bytes  = vec![];
-        is_av1         = false;
-        enc            = Encoder::LibX264;
+        encoder_byte   = 0xFF;
         flags          |= FLAG_CONTEXT_PACK;
 
-    } else if working_entropy2 < ZSTD_ROUTE_ENTROPY || encoder::detect() == Encoder::LibX264 {
-        eprintln!("[iris] zstd-route");
+    } else if working_entropy2 < ZSTD_ROUTE_ENTROPY {
+        eprintln!("[iris] rANS-route");
         let working_prof = profile::profile(&working);
         let (flat, position_lists, hdr) =
             context_pack::pack_with_positions(&working, &working_prof.context_table);
@@ -173,40 +166,33 @@ pub fn compress(input: &Path, output: &Path) -> Result<()> {
 
         let scatter = container::serialize_scatter(&position_lists)?;
         let ctx_h   = context_pack::serialize_header(&hdr);
-        let compressed = zstd::encode_all(std::io::Cursor::new(&flat), 22)?;
-        eprintln!("[iris] zstd flat: {}B → {}B ({:.1}x)",
-            flat.len(), compressed.len(), flat.len() as f64/compressed.len() as f64);
+        let compressed = crate::rans::encode(&flat);
+        eprintln!("[iris] rANS flat: {}B → {}B ({:.1}x)",
+            flat.len(), compressed.len(), flat.len() as f64/compressed.len().max(1) as f64);
 
         video_payload  = compressed;
         scatter_bytes  = scatter;
         ctx_hdr_bytes  = ctx_h;
-        is_av1         = false;
-        enc            = Encoder::LibX264;
+        encoder_byte   = 0xFF;
         flags          |= FLAG_CONTEXT_PACK;
 
     } else {
-        eprintln!("[iris] AV1-route");
-        let working_prof  = profile::profile(&working);
-        let (hdr, yuv)    = context_pack::pack(&working, &working_prof.context_table);
-        let position_lists: Vec<Vec<u32>> = hdr.context_map.iter()
-            .map(|e| working_prof.context_table.buckets[e.context_byte as usize].clone())
-            .collect();
-        let scatter = container::serialize_scatter(&position_lists)?;
-        let ctx_h   = context_pack::serialize_header(&hdr);
-        let det_enc = encoder::detect();
-        let encoded = encoder::encode(&yuv, hdr.frame_width as usize,
-            hdr.frame_height as usize, hdr.frame_count as usize, det_enc)?;
+        // High-entropy route: hierarchical block matching + rANS residual coding
+        eprintln!("[iris] block-match route");
+        let compressed = crate::block_match::compress(&working);
+        eprintln!("[iris] block-match: {}B → {}B ({:.1}x)",
+            working.len(), compressed.len(),
+            working.len() as f64 / compressed.len().max(1) as f64);
 
-        video_payload  = encoded;
-        scatter_bytes  = scatter;
-        ctx_hdr_bytes  = ctx_h;
-        is_av1         = true;
-        enc            = det_enc;
+        video_payload  = compressed;
+        scatter_bytes  = vec![];
+        ctx_hdr_bytes  = vec![];
+        encoder_byte   = 0xFD;  // block-match marker
         flags          |= FLAG_CONTEXT_PACK;
     }
 
     let c = IrisContainer {
-        encoder: if is_av1 { enc.to_u8() } else { 0xFF },
+        encoder: encoder_byte,
         flags, original_len: original_len as u64,
         byte0: working_byte0, original_byte0,
         resonance_hdr: resonance_hdr_bytes, grammar_data: grammar_bytes,
@@ -245,7 +231,8 @@ pub fn decompress(input: &Path, output: &Path) -> Result<()> {
 
     // ── Passthrough ───────────────────────────────────────────────────────
     if c.flags == 0 {
-        let dec = zstd::decode_all(std::io::Cursor::new(&c.video))?;
+        let dec = crate::rans::decode(&c.video)
+            .ok_or_else(|| anyhow::anyhow!("corrupt passthrough data"))?;
         std::fs::write(output, &dec[..original_len.min(dec.len())])?;
         return Ok(());
     }
@@ -253,31 +240,24 @@ pub fn decompress(input: &Path, output: &Path) -> Result<()> {
     // ── Decompress video/flat ─────────────────────────────────────────────
     let working = if c.has_context_pack() {
         if c.ctx_hdr.is_empty() {
-            // Ultra-compress: video = bzip2-compressed working data
-            use bzip2::read::BzDecoder;
-            use std::io::Read;
-            let mut bz = BzDecoder::new(std::io::Cursor::new(&c.video));
-            let mut dec = Vec::new();
-            bz.read_to_end(&mut dec).unwrap_or(0);
-            dec
+            // Ultra-compress: video = range-coded working data
+            crate::range_coder::decode(&c.video)
+                .ok_or_else(|| anyhow::anyhow!("corrupt range-coded data"))?
         } else if c.encoder == 0xFF {
             // zstd-route
             let (hdr, _) = context_pack::deserialize_header(&c.ctx_hdr)
                 .ok_or_else(|| anyhow::anyhow!("corrupt ctx hdr"))?;
-            let flat = zstd::decode_all(std::io::Cursor::new(&c.video))?;
+            let flat = crate::rans::decode(&c.video)
+                .ok_or_else(|| anyhow::anyhow!("corrupt rANS data"))?;
             let position_lists = container::deserialize_scatter(&c.scatter_map)?;
             context_pack::unpack_full(&hdr, &flat, c.byte0, &position_lists)
+        } else if c.encoder == 0xFD {
+            // Block-match route
+            crate::block_match::decompress(&c.video)
+                .ok_or_else(|| anyhow::anyhow!("corrupt block-match data"))?
         } else {
-            // AV1-route
-            let (hdr, _) = context_pack::deserialize_header(&c.ctx_hdr)
-                .ok_or_else(|| anyhow::anyhow!("corrupt ctx hdr"))?;
-            let enc = Encoder::from_u8(c.encoder);
-            let yuv = encoder::decode(&c.video,
-                hdr.frame_width as usize, hdr.frame_height as usize,
-                hdr.frame_count as usize, enc)?;
-            let position_lists = container::deserialize_scatter(&c.scatter_map)?;
-            let flat = extract_y_planes(&yuv, &hdr);
-            context_pack::unpack_full(&hdr, &flat, c.byte0, &position_lists)
+            // Legacy AV1 route — no longer produced, but handle for compat
+            anyhow::bail!("unsupported encoder byte {:#04x} (legacy AV1?)", c.encoder);
         }
     } else {
         c.video.clone()
@@ -346,7 +326,7 @@ fn write_passthrough(data: &[u8], output: &Path) -> Result<()> {
         byte0: data[0], original_byte0: data[0],
         resonance_hdr: vec![], grammar_data: vec![],
         pred_meta: vec![], scatter_map: vec![], ctx_hdr: vec![],
-        video: zstd::encode_all(std::io::Cursor::new(data), 22)?,
+        video: crate::rans::encode(data),
     };
     let f = std::fs::File::create(output)?;
     c.write(&mut BufWriter::new(f))?;
@@ -433,16 +413,3 @@ fn rebuild_from_pred(working: &[u8], metas: &[crate::prediction::BlockMeta]) -> 
     decoded.into_iter().filter_map(|d| d).flatten().collect()
 }
 
-fn extract_y_planes(yuv: &[u8], hdr: &context_pack::ContextPackHeader) -> Vec<u8> {
-    let w  = hdr.frame_width  as usize;
-    let h  = hdr.frame_height as usize;
-    let nf = hdr.frame_count  as usize;
-    let pf = w * h;
-    let fs = pf * 3 / 2;
-    let mut flat = Vec::with_capacity(pf * nf);
-    for fi in 0..nf {
-        let y0 = fi * fs; let end = (y0 + pf).min(yuv.len());
-        flat.extend_from_slice(&yuv[y0..end]);
-    }
-    flat
-}

@@ -3,17 +3,19 @@ mod resonance;
 mod grammar;
 mod prediction;
 mod context_pack;
-mod encoder;
 mod container;
 mod pipeline;
+mod range_coder;
+mod rans;
+mod block_match;
 
 use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name="iris", version="0.2.0", author="Harsh Patel",
-    about="GPU-accelerated compression: VisionSort + Resonance + Grammar + Prediction Graph + Context-Aware AV1")]
+#[command(name="iris", version="1.0.0", author="Harsh Patel",
+    about="iris v1.0 — zero runtime dependencies compression")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
