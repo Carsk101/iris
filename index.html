@@ -3,311 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>iris</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&display=swap');
-
-    :root {
-      --bg: #F5F0E8;
-      --text: #1C3A2B;
-      --accent: #C4856A;
-      --card-bg: #FAF7F2;
-      --font-body: 'EB Garamond', serif;
-      --font-mono: 'DM Mono', monospace;
-    }
-
-    /* SVG Grain noise overlay */
-    body::before {
-      content: "";
-      position: fixed;
-      top: 0; left: 0; width: 100vw; height: 100vh;
-      pointer-events: none;
-      z-index: 9999;
-      opacity: 0.03;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      background-color: var(--bg);
-      color: var(--text);
-      font-family: var(--font-body);
-      font-size: 18px;
-      line-height: 1.8;
-      margin: 0;
-      padding: 0;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    /* Nav */
-    nav {
-      position: sticky;
-      top: 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 32px 48px;
-      z-index: 100;
-    }
-
-    .nav-left {
-      font-family: var(--font-body);
-      font-style: italic;
-      font-size: 24px;
-      text-decoration: none;
-      color: var(--text);
-    }
-
-    .nav-right {
-      display: flex;
-      gap: 24px;
-    }
-
-    .nav-right a {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      text-transform: lowercase;
-      font-variant: small-caps;
-      text-decoration: none;
-      color: var(--text);
-      letter-spacing: 0.05em;
-    }
-
-    /* Container */
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 0 32px;
-    }
-    
-    section {
-      padding: 120px 0;
-    }
-
-    /* Section Headings */
-    .section-title {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--accent);
-      text-transform: lowercase;
-      font-variant: small-caps;
-      letter-spacing: 0.15em;
-      margin: 0 0 48px 0;
-      font-weight: normal;
-    }
-
-    /* Hero */
-    .hero {
-      min-height: calc(100vh - 100px);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-    }
-
-    .hero-content {
-      opacity: 0;
-      animation: fadeIn 600ms ease-in forwards;
-    }
-
-    @keyframes fadeIn {
-      to { opacity: 1; }
-    }
-
-    .hero h1 {
-      font-size: 72px;
-      line-height: 1.1;
-      font-weight: 400;
-      letter-spacing: 0.02em;
-      margin: 0 0 32px 0;
-      text-align: center;
-    }
-
-    .hero-subtitle {
-      font-size: 20px;
-      color: var(--text);
-      opacity: 0.8;
-      text-align: center;
-      margin: 0 0 48px 0;
-    }
-
-    .hero-code {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .hero-code code {
-      font-family: var(--font-mono);
-      font-size: 14px;
-      color: var(--text);
-      background: none;
-      padding: 0;
-    }
-
-    .hero-divider {
-      width: 100%;
-      height: 0.5px;
-      background-color: var(--accent);
-      opacity: 0.3;
-      margin: auto 0 0 0;
-      border: none;
-    }
-
-    /* Benchmarks */
-    .table-container {
-      overflow-x: auto;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-family: var(--font-mono);
-      font-size: 14px;
-      text-align: left;
-    }
-
-    th, td {
-      padding: 16px 24px;
-      border-bottom: 0.5px solid rgba(28,58,43,0.15);
-      white-space: nowrap;
-    }
-    
-    td:first-child, th:first-child {
-      padding-left: 0;
-    }
-    td:last-child, th:last-child {
-      padding-right: 0;
-    }
-
-    th {
-      font-weight: normal;
-      color: rgba(28,58,43,0.7);
-    }
-
-    tr:last-child td {
-      border-bottom: none;
-    }
-
-    .iris-col {
-      color: var(--accent);
-    }
-
-    .table-footnote {
-      font-family: var(--font-body);
-      font-style: italic;
-      font-size: 14px;
-      color: var(--text);
-      opacity: 0.6;
-      margin: 16px 0 0 0;
-    }
-
-    /* How it works */
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 32px;
-    }
-    
-    .card:nth-child(5) {
-      grid-column: 1 / -1;
-      width: calc(50% - 16px);
-      margin: 0 auto;
-    }
-
-    .card {
-      background-color: var(--card-bg);
-      border: 1px solid rgba(28,58,43,0.12);
-      border-radius: 2px;
-      padding: 32px;
-      box-shadow: 0 1px 1px rgba(0,0,0,0.03);
-    }
-
-    .card-num {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--accent);
-      opacity: 0.7;
-      margin-bottom: 24px;
-    }
-
-    .card h3 {
-      font-style: italic;
-      font-size: 20px;
-      font-weight: normal;
-      margin: 0 0 16px 0;
-    }
-
-    .card p {
-      font-size: 16px;
-      margin: 0;
-      color: var(--text);
-    }
-
-    /* Usage */
-    .usage-item {
-      margin-bottom: 48px;
-    }
-    .usage-item:last-child {
-      margin-bottom: 0;
-    }
-
-    .terminal-card {
-      background-color: var(--text);
-      color: var(--bg);
-      font-family: var(--font-mono);
-      font-size: 13px;
-      padding: 20px;
-      border-radius: 2px;
-      margin-bottom: 16px;
-      display: inline-block;
-      width: 100%;
-      box-sizing: border-box;
-    }
-
-    .usage-caption {
-      font-family: var(--font-body);
-      font-style: italic;
-      font-size: 16px;
-      color: rgba(28,58,43,0.7);
-      margin: 0;
-    }
-
-    /* Footer */
-    footer {
-      text-align: center;
-      padding: 60px 0;
-      font-style: italic;
-      opacity: 0.6;
-      font-size: 16px;
-    }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-      .hero h1 {
-        font-size: 48px;
-      }
-      .grid {
-        grid-template-columns: 1fr;
-      }
-      .card:nth-child(5) {
-        grid-column: 1 / -1;
-        width: 100%;
-      }
-      section {
-         padding: 80px 0;
-      }
-      nav {
-        padding: 24px;
-      }
-    }
-  </style>
+  <title>iris — perception-first compression</title>
+  <meta name="description" content="A compression engine that treats compression as a perception problem. Built in Rust with zero dependencies.">
+  <link rel="stylesheet" href="styles.css">
+  <script src="main.js" defer></script>
 </head>
-<body>
+<body class="home">
 
   <nav>
     <a href="index.html" class="nav-left">iris</a>
@@ -319,129 +20,140 @@
     </div>
   </nav>
 
-  <div class="hero">
-    <div class="hero-content container">
-      <h1>compression that<br>sees the data</h1>
-      <p class="hero-subtitle">iris profiles before it compresses. structure first, codec second.</p>
-      <div class="hero-code">
-        <code>iris compress archive.csv out.iris</code>
-        <code>iris decompress out.iris recovered.csv</code>
+  <main>
+    <section class="cover">
+      <h1 class="cover-title reveal visible">iris</h1>
+      <p class="cover-subtitle reveal visible">the art of seeing data.</p>
+      <div class="scroll-guide reveal visible"></div>
+    </section>
+
+    <div class="hero">
+      <div class="container">
+        <div class="hero-eyebrow reveal stagger-1">perception first</div>
+        <h1 class="reveal stagger-2">compression that<br>sees the data</h1>
+        <p class="hero-subtitle reveal stagger-3">iris profiles before it compresses. structure first, codec second.</p>
+        <div class="hero-code reveal stagger-4">
+          <div class="terminal-card">
+            <code>iris compress archive.csv out.iris</code><br>
+            <code>iris decompress out.iris recovered.csv</code>
+          </div>
+        </div>
       </div>
     </div>
-    <hr class="hero-divider">
-  </div>
 
-  <div class="container">
-    <section>
-      <h2 class="section-title">the numbers</h2>
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>file type</th>
-              <th>size</th>
-              <th>zstd -19</th>
-              <th>bzip2 -9</th>
-              <th class="iris-col">iris</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>random binary</td>
-              <td>5 MB</td>
-              <td>1.00x</td>
-              <td>1.00x</td>
-              <td class="iris-col">1.00x</td>
-            </tr>
-            <tr>
-              <td>structured logs</td>
-              <td>7.4 MB</td>
-              <td>9.76x</td>
-              <td>13.28x</td>
-              <td class="iris-col">15.0x</td>
-            </tr>
-            <tr>
-              <td>CSV export</td>
-              <td>3.5 MB</td>
-              <td>4.36x</td>
-              <td>4.98x</td>
-              <td class="iris-col">6.6x</td>
-            </tr>
-            <tr>
-              <td>nearly-sorted u32s</td>
-              <td>4 MB</td>
-              <td>171x</td>
-              <td>247x</td>
-              <td class="iris-col">405x</td>
-            </tr>
-            <tr>
-              <td>repetitive binary</td>
-              <td>2 MB</td>
-              <td>3.29x</td>
-              <td>3.23x</td>
-              <td class="iris-col">3.30x</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="table-footnote">all roundtrips verified lossless by MD5</p>
-    </section>
-
-    <section>
-      <h2 class="section-title">five stages</h2>
-      <div class="grid">
-        <div class="card">
-          <div class="card-num">01</div>
-          <h3>profile</h3>
-          <p>a single read-only pass measures entropy, autocorrelation at 64 lags, and block fingerprints. nothing is read twice. every downstream stage uses this pass.</p>
+    <div class="container reveal">
+      <section>
+        <h2 class="section-title">the numbers</h2>
+        <div class="table-container">
+          <style>
+            table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 14px; text-align: left; }
+            th, td { padding: 16px 24px; border-bottom: 0.5px solid rgba(28,58,43,0.1); }
+            th { font-weight: normal; color: rgba(28,58,43,0.6); }
+            .iris-col { color: var(--accent); }
+            tr:hover td { color: var(--accent); transition: color 0.4s var(--ease); }
+          </style>
+          <table>
+            <thead>
+              <tr>
+                <th>file type</th>
+                <th>size</th>
+                <th>zstd -19</th>
+                <th>bzip2 -9</th>
+                <th class="iris-col">iris</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>random binary</td><td>5 MB</td><td>1.00x</td><td>1.00x</td><td class="iris-col">1.00x</td></tr>
+              <tr><td>structured logs</td><td>7.4 MB</td><td>9.76x</td><td>13.28x</td><td class="iris-col">15.0x</td></tr>
+              <tr><td>CSV export</td><td>3.5 MB</td><td>4.36x</td><td>4.98x</td><td class="iris-col">6.6x</td></tr>
+              <tr><td>nearly-sorted u32s</td><td>4 MB</td><td>171x</td><td>247x</td><td class="iris-col">405x</td></tr>
+              <tr><td>repetitive binary</td><td>2 MB</td><td>3.29x</td><td>3.23x</td><td class="iris-col">3.30x</td></tr>
+            </tbody>
+          </table>
         </div>
-        <div class="card">
-          <div class="card-num">02</div>
-          <h3>column grammar</h3>
-          <p>structured text is decomposed by column. timestamps become three u8 arrays. enums become dictionary indices. the result approaches the information-theoretic minimum per field.</p>
-        </div>
-        <div class="card">
-          <div class="card-num">03</div>
-          <h3>resonance</h3>
-          <p>periodic structure is extracted via wrapping i8 delta at the dominant lag. three passes maximum. data with a strong period compresses to near-zero residual.</p>
-        </div>
-        <div class="card">
-          <div class="card-num">04</div>
-          <h3>prediction graph</h3>
-          <p>similar blocks anywhere in the file are found via SimHash and LSH bands. no window limit. similar blocks stored as XOR deltas. lz77 can't do this.</p>
-        </div>
-        <div class="card">
-          <div class="card-num">05</div>
-          <h3>route</h3>
-          <p>entropy decides the codec. below 0.15: bzip2. below 0.80: zstd. above: AV1 via NVENC GPU. the codec matches the signal.</p>
-        </div>
-      </div>
-    </section>
+        <p class="table-footnote" style="font-style: italic; opacity: 0.5; font-size: 14px; margin-top: 16px;">all roundtrips verified lossless by MD5</p>
+      </section>
 
-    <section>
-      <h2 class="section-title">usage</h2>
-      
-      <div class="usage-item">
-        <div class="terminal-card">iris compress input.log output.iris</div>
-        <p class="usage-caption">compress an input file into the custom iris format</p>
-      </div>
+      <section class="reveal">
+        <h2 class="section-title">five stages</h2>
+        <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px;">
+          <style>
+             .card { margin-bottom: 16px; }
+             @media (max-width: 768px) { .grid { grid-template-columns: 1fr !important; } }
+          </style>
+          <div class="card reveal stagger-1">
+            <div class="card-num">01</div>
+            <h3>profile</h3>
+            <p>a single read-only pass measures entropy, autocorrelation at 64 lags, and block fingerprints. nothing is read twice.</p>
+          </div>
+          <div class="card reveal stagger-2">
+            <div class="card-num">02</div>
+            <h3>column grammar</h3>
+            <p>structured text is decomposed by column. enums become dict indices. the result approaches the information-theoretic minimum.</p>
+          </div>
+          <div class="card reveal stagger-1">
+            <div class="card-num">03</div>
+            <h3>resonance</h3>
+            <p>periodic structure is extracted via wrapping i8 delta at the dominant lag. data with a strong period compresses to near-zero residual.</p>
+          </div>
+          <div class="card reveal stagger-2">
+            <div class="card-num">04</div>
+            <h3>prediction graph</h3>
+            <p>similar blocks found via SimHash and LSH bands. no window limit. similar blocks stored as XOR deltas. lz77 can't do this.</p>
+          </div>
+          <div class="card reveal stagger-1" style="grid-column: 1 / -1; max-width: 460px; margin: 0 auto;">
+            <div class="card-num">05</div>
+            <h3>route</h3>
+            <p>final entropy decides the pure-rust codec. rANS, range-coding, or hierarchical block matching. zero external dependencies.</p>
+          </div>
+        </div>
+      </section>
 
-      <div class="usage-item">
-        <div class="terminal-card">iris decompress output.iris recovered.log</div>
-        <p class="usage-caption">reconstruct the exact original bytes</p>
-      </div>
-
-      <div class="usage-item">
-        <div class="terminal-card">iris info output.iris</div>
-        <p class="usage-caption">inspect how the file was routed without fully decompressing it</p>
-      </div>
-
-    </section>
-  </div>
+      <section class="reveal">
+        <h2 class="section-title">usage</h2>
+        <style>
+          .usage-item { margin-bottom: 56px; }
+          .usage-caption { font-style: italic; opacity: 0.6; font-size: 16px; margin-top: 12px; }
+        </style>
+        <div class="usage-item reveal">
+          <div class="terminal-card">iris compress input.log output.iris</div>
+          <p class="usage-caption">compress an input file into the custom iris format</p>
+        </div>
+        <div class="usage-item reveal">
+          <div class="terminal-card">iris decompress output.iris recovered.log</div>
+          <p class="usage-caption">reconstruct the exact original bytes</p>
+        </div>
+        <div class="usage-item reveal">
+          <div class="terminal-card">iris info output.iris</div>
+          <p class="usage-caption">inspect how the file was routed based on its profile</p>
+        </div>
+      </section>
+    </div>
+  </main>
 
   <footer>
-    built in rust. authored by harsh patel.
+    <div class="container footer-grid">
+      <div class="footer-col">
+        <a href="index.html" class="footer-logo">iris</a>
+        <p class="footer-tagline">A perception-first compression engine built in Rust. Structure first, codec second.</p>
+      </div>
+      <div class="footer-col">
+        <h4>project</h4>
+        <a href="how-it-works.html">how it works</a>
+        <a href="visionsort.html">visionsort</a>
+        <a href="get-started.html">download</a>
+      </div>
+      <div class="footer-col">
+        <h4>connect</h4>
+        <a href="https://github.com/Carsk101/iris">github</a>
+        <a href="http://harshswebsite.com" target="_blank">harsh patel</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>built in rust. authored by <a href="http://harshswebsite.com" target="_blank" style="color: inherit; text-decoration: underline;">harsh patel</a>.</p>
+    </div>
   </footer>
 
+  <script src="main.js"></script>
 </body>
 </html>

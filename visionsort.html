@@ -3,436 +3,143 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>visionsort - iris</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&display=swap');
-
-    :root {
-      --bg: #F5F0E8;
-      --text: #1C3A2B;
-      --accent: #C4856A;
-      --card-bg: #FAF7F2;
-      --font-body: 'EB Garamond', serif;
-      --font-mono: 'DM Mono', monospace;
-    }
-
-    body::before {
-      content: "";
-      position: fixed;
-      top: 0; left: 0; width: 100vw; height: 100vh;
-      pointer-events: none;
-      z-index: 9999;
-      opacity: 0.03;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    }
-
-    html { scroll-behavior: smooth; }
-
-    body {
-      background-color: var(--bg);
-      color: var(--text);
-      font-family: var(--font-body);
-      font-size: 18px;
-      line-height: 1.8;
-      margin: 0;
-      padding: 0;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    nav {
-      position: sticky;
-      top: 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 32px 48px;
-      z-index: 100;
-      background: var(--bg);
-    }
-
-    .nav-left {
-      font-family: var(--font-body);
-      font-style: italic;
-      font-size: 24px;
-      text-decoration: none;
-      color: var(--text);
-    }
-
-    .nav-right {
-      display: flex;
-      gap: 24px;
-    }
-
-    .nav-right a {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      text-transform: lowercase;
-      font-variant: small-caps;
-      text-decoration: none;
-      color: var(--text);
-      letter-spacing: 0.05em;
-    }
-
-    .nav-right a.active {
-      opacity: 0.5;
-      cursor: default;
-      pointer-events: none;
-    }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 0 32px;
-    }
-    
-    section {
-      padding: 120px 0;
-    }
-
-    .section-title {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--accent);
-      text-transform: lowercase;
-      font-variant: small-caps;
-      letter-spacing: 0.15em;
-      margin: 0 0 48px 0;
-      font-weight: normal;
-    }
-
-    .hero {
-      height: 50vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-    }
-
-    .hero-eyebrow {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--accent);
-      text-transform: lowercase;
-      font-variant: small-caps;
-      margin-bottom: 24px;
-    }
-
-    .hero h1 {
-      font-size: 68px;
-      line-height: 1.1;
-      font-weight: 400;
-      letter-spacing: 0.02em;
-      margin: 0 0 24px 0;
-    }
-
-    .hero-subtitle {
-      font-size: 20px;
-      color: var(--text);
-      opacity: 0.8;
-      margin: 0;
-    }
-
-    .hero-divider {
-      width: 100%;
-      height: 0.5px;
-      background-color: var(--accent);
-      opacity: 0.3;
-      margin: auto 0 0 0;
-      border: none;
-    }
-
-    .split-section {
-      display: flex;
-      gap: 60px;
-      justify-content: space-between;
-    }
-
-    .split-60 { width: 60%; }
-    .split-40 { width: 40%; }
-    .split-50 { width: 50%; }
-
-    .split-section p {
-      font-size: 17px;
-      line-height: 1.8;
-      margin: 0 0 24px 0;
-    }
-
-    .split-section p:last-child {
-      margin-bottom: 0;
-    }
-
-    .terminal-card {
-      background-color: var(--text);
-      color: var(--bg);
-      font-family: var(--font-mono);
-      font-size: 13px;
-      padding: 24px;
-      border-radius: 2px;
-      box-sizing: border-box;
-      white-space: pre-wrap;
-      line-height: 1.6;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 32px;
-    }
-
-    .card {
-      background-color: var(--card-bg);
-      border: 1px solid rgba(28,58,43,0.12);
-      border-radius: 2px;
-      padding: 32px;
-      box-shadow: 0 1px 1px rgba(0,0,0,0.03);
-    }
-
-    .card-num {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--accent);
-      opacity: 0.7;
-      margin-bottom: 24px;
-      text-transform: uppercase;
-    }
-
-    .card h3 {
-      font-style: italic;
-      font-size: 20px;
-      font-weight: normal;
-      margin: 0 0 16px 0;
-    }
-
-    .card p {
-      font-size: 16px;
-      margin: 0;
-      color: var(--text);
-    }
-
-    .walkthrough-card {
-      background-color: var(--card-bg);
-      border: 1px solid rgba(28,58,43,0.12);
-      border-radius: 2px;
-      padding: 40px;
-      box-shadow: 0 1px 1px rgba(0,0,0,0.03);
-      font-size: 17px;
-    }
-
-    .walkthrough-card p {
-      margin: 0 0 24px 0;
-    }
-    .walkthrough-card p:last-child {
-      margin-bottom: 0;
-    }
-    
-    .inline-code {
-      font-family: var(--font-mono);
-      color: var(--accent);
-    }
-
-    .walkthrough-sub {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      letter-spacing: 0.05em;
-      color: var(--text);
-      opacity: 0.6;
-      margin: -36px 0 36px 0;
-    }
-
-    .stats-row {
-      display: flex;
-      justify-content: space-between;
-      font-family: var(--font-mono);
-      font-size: 14px;
-      margin-top: 24px;
-      padding: 0 8px;
-    }
-
-    .stats-row span {
-      color: var(--text);
-      opacity: 0.6;
-    }
-    .stats-row .highlight {
-      color: var(--accent);
-      opacity: 1;
-    }
-
-    .diagram-container {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .diagram-box {
-      background-color: var(--card-bg);
-      border: 1px solid rgba(28,58,43,0.12);
-      border-left: 3px solid var(--accent);
-      border-radius: 2px;
-      padding: 16px 20px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-    }
-
-    .diagram-line {
-      width: 1px;
-      height: 16px;
-      background-color: var(--accent);
-      margin-left: 20px;
-    }
-
-    footer {
-      text-align: center;
-      padding: 60px 0;
-      font-style: italic;
-      color: var(--text);
-      opacity: 0.6;
-      font-size: 16px;
-    }
-
-    @media (max-width: 900px) {
-      .grid {
-        grid-template-columns: 1fr;
-      }
-      .split-section {
-        flex-direction: column;
-      }
-      .split-60, .split-40, .split-50 {
-        width: 100%;
-      }
-    }
-    @media (max-width: 768px) {
-      .hero {
-        height: auto;
-        padding-top: 60px;
-        min-height: 50vh;
-      }
-      .hero h1 {
-        font-size: 48px;
-      }
-      section {
-         padding: 80px 0;
-      }
-      nav {
-        padding: 24px;
-      }
-      .stats-row {
-        flex-direction: column;
-        gap: 16px;
-      }
-    }
-  </style>
+  <title>visionsort — iris</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="main.js" defer></script>
 </head>
-<body>
+<body class="visionsort">
 
   <nav>
     <a href="index.html" class="nav-left">iris</a>
     <div class="nav-right">
+      <a href="how-it-works.html">how it works</a>
       <a href="visionsort.html" class="active">visionsort</a>
-      <a href="https://github.com/Carsk101/iris">github</a>
       <a href="get-started.html">download</a>
+      <a href="https://github.com/Carsk101/iris">github</a>
     </div>
   </nav>
 
-  <div class="hero">
-    <div class="container" style="width: 100%;">
-      <div class="hero-eyebrow">the algorithm beneath</div>
-      <h1>iris sees because<br>visionsort taught it to</h1>
-      <p class="hero-subtitle">visionsort treats sorting as a perception problem. iris inherits its eyes.</p>
-    </div>
-    <hr class="hero-divider">
-  </div>
+  <main>
+    <section class="cover">
+      <h1 class="cover-title reveal visible">visionsort</h1>
+      <p class="cover-subtitle reveal visible">the algorithm beneath.</p>
+      <div class="scroll-guide reveal visible"></div>
+    </section>
 
-  <div class="container">
-    <section>
-      <h2 class="section-title">the algorithm</h2>
-      <div class="split-section">
-        <div class="split-60">
-          <p>Most sorting algorithms know nothing about their input. They compare and swap blindly — treating every array as equally unknown.</p>
-          <p>VisionSort profiles before it sorts. A single forward pass measures entropy, samples disorder, identifies anchors, and maintains a <span class="inline-code">running_surprise</span> signal that updates with every element. When the pass completes, it knows what it's looking at. Then it sorts.</p>
-          <p>iris inherits this pass entirely. The actual sorting never runs — only the perception stage does.</p>
-        </div>
-        <div class="split-40">
-          <div class="terminal-card">// the signal
+    <div class="hero">
+      <div class="container">
+        <div class="hero-eyebrow reveal stagger-1">the algorithm beneath</div>
+        <h1 class="reveal stagger-2">iris sees because<br>visionsort taught it to</h1>
+        <p class="hero-subtitle reveal stagger-3">visionsort treats sorting as a perception problem. iris inherits its eyes.</p>
+      </div>
+    </div>
+
+    <div class="container">
+      <section class="reveal">
+        <h2 class="section-title">the algorithm</h2>
+        <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px;">
+          <div class="prose reveal">
+            <p>Most sorting algorithms know nothing about their input. They compare and swap blindly — treating every array as equally unknown.</p>
+            <p>VisionSort profiles before it sorts. A single forward pass measures entropy, samples disorder, identifies anchors, and maintains a <span style="font-family: var(--font-mono); color: var(--accent);">running_surprise</span> signal that updates with every element. When the pass completes, it knows what it's looking at.</p>
+            <p>iris inherits this pass entirely. The actual sorting never runs — only the perception stage does.</p>
+          </div>
+          <div class="terminal-card reveal" style="align-self: start;">
+            <pre><code>// the signal
 running_surprise: f64
-// 0.0 → completely predictable
-// 1.0 → maximally chaotic
+// 0.0 → predictable
+// 1.0 → chaotic
 
 // updated per element
 running_surprise =
   running_surprise * 0.995
-  + surprise       * 0.005</div>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <h2 class="section-title">three signals</h2>
-      <p style="font-family: var(--font-body); font-style: italic; font-size: 17px; width: 100%; margin: 0 0 48px 0;">
-        "iris does not sort. it only perceives. these are the three outputs it takes from visionsort's profiling pass."
-      </p>
-      <div class="grid">
-        <div class="card">
-          <div class="card-num">i</div>
-          <h3>running_surprise → stage gating</h3>
-          <p>When surprise stays low, the data is patterned. iris opens its expensive stages — resonance extraction, stride grammar, the prediction graph. When surprise is high it routes directly to the codec. The signal itself decides. Nothing is tuned by hand.</p>
-        </div>
-        <div class="card">
-          <div class="card-num">ii</div>
-          <h3>LCG disorder sampler → block fingerprints</h3>
-          <p>VisionSort samples random index pairs via an LCG to estimate disorder. iris intercepts that same LCG stream. Each sampled pair, hashed and accumulated, builds a 64-bit SimHash fingerprint per block. The fingerprints feed the prediction graph and cost nothing extra — the LCG was running anyway.</p>
-        </div>
-        <div class="card">
-          <div class="card-num">iii</div>
-          <h3>phase 2 anchors → resonance seeds</h3>
-          <p>VisionSort segments the array using anchor elements during its second phase. iris reads the anchor spacing as candidate lag values for resonance detection. On nearly-sorted integer data, the anchors repeat at the integer stride — iris finds the dominant period on the first attempt rather than scanning all 64 lags blindly.</p>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <h2 class="section-title">nearsorted.bin</h2>
-      <div class="walkthrough-sub">4,000,000 bytes · 1M u32 integers · 200 random swaps</div>
-      <div class="walkthrough-card">
-        <p>The profiling pass runs. <span class="inline-code">running_surprise</span> holds near <span class="inline-code">0.02</span>. Autocorrelation peaks at <span class="inline-code">lag=4</span> with strength <span class="inline-code">1.000</span> — one integer width. Stage gates open fully.</p>
-        <p>Resonance extraction fires at <span class="inline-code">lag=4</span>. The residual is <span class="inline-code">data[i] wrapping_sub data[i-4]</span> for every byte — six unique values across <span class="inline-code">3,999,996</span> bytes, mostly <span class="inline-code">0x00</span> and <span class="inline-code">0x01</span>.</p>
-        <p>That residual goes to bzip2. BWT sorts the near-constant stream into long identical runs. MTF collapses them to near-zero symbols. Output: <span class="inline-code">9,857</span> bytes.</p>
-        <p>Final ratio: <span class="inline-code">405x</span>.<br>
-        zstd -19 gets <span class="inline-code">171x</span>. bzip2 alone gets <span class="inline-code">247x</span>.<br>
-        The profiling pass is the difference.</p>
-      </div>
-      <div class="stats-row">
-        <span class="highlight">405x iris</span>
-        <span>247x bzip2 -9</span>
-        <span>171x zstd -19</span>
-      </div>
-    </section>
-
-    <section>
-      <h2 class="section-title">shared principle</h2>
-      <div class="split-section">
-        <div class="split-50">
-          <p>VisionSort's core constraint is self-imposed: pay for one read, use it for everything. No second pass, no backward seeks. The entire sorting strategy commits after a single forward traversal.</p>
-          <p>iris applies the same constraint. Its profiling pass builds the context table, computes autocorrelation at 64 lags, accumulates SimHash fingerprints, and tracks <span class="inline-code">running_surprise</span> — all in one forward read. Every stage downstream uses this profile.</p>
-          <p>Perception is cheap and complete before any action begins. This is what VisionSort taught, and what iris inherited.</p>
-        </div>
-        <div class="split-50">
-          <div class="diagram-container">
-            <div class="diagram-box">single forward pass</div>
-            <div class="diagram-line"></div>
-            <div class="diagram-box">entropy · autocorrelation · context table · fingerprints</div>
-            <div class="diagram-line"></div>
-            <div class="diagram-box">stage gates: resonance · grammar · prediction · route</div>
-            <div class="diagram-line"></div>
-            <div class="diagram-box">codec: bzip2 · zstd · AV1</div>
+  + surprise       * 0.005</code></pre>
           </div>
         </div>
-      </div>
-    </section>
-  </div>
+      </section>
+
+      <section class="reveal">
+        <h2 class="section-title">three signals</h2>
+        <p style="font-family: var(--font-body); font-style: italic; font-size: 17px; margin-bottom: 48px; max-width: 600px;">
+          "iris does not sort. it only perceives. these are the three outputs it takes from visionsort's profiling pass."
+        </p>
+        <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 32px;">
+          <style>
+             @media (max-width: 900px) { .grid { grid-template-columns: 1fr !important; } }
+          </style>
+          <div class="card reveal stagger-1">
+            <div class="card-num">i</div>
+            <h3>running_surprise → stage gating</h3>
+            <p style="font-size: 15px;">When surprise stays low, the data is patterned. iris opens its expensive stages — resonance extraction, prediction graph. When high, it routes directly to the code.</p>
+          </div>
+          <div class="card reveal stagger-2">
+            <div class="card-num">ii</div>
+            <h3>disorder sampler → fingerprints</h3>
+            <p style="font-size: 15px;">VisionSort samples random index pairs to estimate disorder. iris intercepts that same stream to build 64-bit SimHash fingerprints for the prediction graph.</p>
+          </div>
+          <div class="card reveal stagger-3">
+            <div class="card-num">iii</div>
+            <h3>phase 2 anchors → resonance seeds</h3>
+            <p style="font-size: 15px;">VisionSort segments the array using anchor elements. iris reads the anchor spacing as candidate lag values for fast resonance detection on sorted data.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal">
+        <h2 class="section-title">nearsorted.bin</h2>
+        <div class="reveal">
+          <p style="font-family: var(--font-mono); font-size: 12px; color: var(--accent); opacity: 0.6; margin-bottom: 8px;">walkthrough</p>
+          <div class="card" style="padding: 48px;">
+            <p style="margin-bottom: 24px;">The profiling pass runs. <span style="font-family: var(--font-mono); color: var(--accent);">running_surprise</span> holds near <span style="font-family: var(--font-mono); color: var(--accent);">0.02</span>. Autocorrelation peaks at <span style="font-family: var(--font-mono); color: var(--accent);">lag=4</span>. Stage gates open fully.</p>
+            <p style="margin-bottom: 24px;">Resonance extraction fires at <span style="font-family: var(--font-mono); color: var(--accent);">lag=4</span>. The residual is <span style="font-family: var(--font-mono); color: var(--accent);">data[i] wrapping_sub data[i-4]</span>. The residual goes to the internal range coder, squashing the stream into 9,857 bytes.</p>
+            <p>Final ratio: <span style="font-family: var(--font-mono); color: var(--accent);">405x</span>.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal">
+        <h2 class="section-title">shared principle</h2>
+        <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 80px;">
+          <div class="prose reveal">
+            <p>VisionSort's core constraint is self-imposed: pay for one read, use it for everything. iris applies the same constraint. Its profiling pass builds the context table, computes autocorrelation at 64 lags, and tracks surprise — all in one forward read.</p>
+            <p>Perception is cheap and complete before any action begins.</p>
+          </div>
+          <div class="diagram reveal" style="border-left: 1px solid var(--accent); padding-left: 32px;">
+            <h4 style="font-family: var(--font-mono); font-size: 11px; font-variant: small-caps; color: var(--accent); margin-bottom: 24px;">pipeline flow</h4>
+            <ul style="list-style: none; font-family: var(--font-mono); font-size: 13px;">
+              <li style="margin-bottom: 12px;">→ single forward pass</li>
+              <li style="margin-bottom: 12px;">→ entropy & fingerprints</li>
+              <li style="margin-bottom: 12px;">→ stage gates open</li>
+              <li>→ codec: rANS / range coder</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
 
   <footer>
-    built in rust. authored by harsh patel.
+    <div class="container footer-grid">
+      <div class="footer-col">
+        <a href="index.html" class="footer-logo">iris</a>
+        <p class="footer-tagline">A perception-first compression engine built in Rust. Structure first, codec second.</p>
+      </div>
+      <div class="footer-col">
+        <h4>project</h4>
+        <a href="how-it-works.html">how it works</a>
+        <a href="visionsort.html">visionsort</a>
+        <a href="get-started.html">download</a>
+      </div>
+      <div class="footer-col">
+        <h4>connect</h4>
+        <a href="https://github.com/Carsk101/iris">github</a>
+        <a href="http://harshswebsite.com" target="_blank">harsh patel</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>built in rust. authored by <a href="http://harshswebsite.com" target="_blank" style="color: inherit; text-decoration: underline;">harsh patel</a>.</p>
+    </div>
   </footer>
 
+  <script src="main.js"></script>
 </body>
 </html>

@@ -3,199 +3,115 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>get started - iris</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&display=swap');
-
-    :root {
-      --bg: #F5F0E8;
-      --text: #1C3A2B;
-      --accent: #C4856A;
-      --card-bg: #FAF7F2;
-      --font-body: 'EB Garamond', serif;
-      --font-mono: 'DM Mono', monospace;
-    }
-
-    body::before {
-      content: "";
-      position: fixed;
-      top: 0; left: 0; width: 100vw; height: 100vh;
-      pointer-events: none;
-      z-index: 9999;
-      opacity: 0.03;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      background-color: var(--bg);
-      color: var(--text);
-      font-family: var(--font-body);
-      font-size: 18px;
-      line-height: 1.8;
-      margin: 0;
-      padding: 0;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    nav {
-      position: sticky;
-      top: 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 32px 48px;
-      z-index: 100;
-      background: var(--bg);
-    }
-
-    .nav-left {
-      font-family: var(--font-body);
-      font-style: italic;
-      font-size: 24px;
-      text-decoration: none;
-      color: var(--text);
-    }
-
-    .nav-right {
-      display: flex;
-      gap: 24px;
-    }
-
-    .nav-right a {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      text-transform: lowercase;
-      font-variant: small-caps;
-      text-decoration: none;
-      color: var(--text);
-      letter-spacing: 0.05em;
-    }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 0 32px 60px 32px;
-    }
-    
-    section {
-      padding: 60px 0;
-    }
-
-    .section-title {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--accent);
-      text-transform: lowercase;
-      font-variant: small-caps;
-      letter-spacing: 0.15em;
-      margin: 0 0 32px 0;
-      font-weight: normal;
-    }
-
-    .hero-title {
-      font-size: 48px;
-      line-height: 1.1;
-      font-weight: 400;
-      letter-spacing: 0.02em;
-      margin: 60px 0 20px 0;
-    }
-
-    .prose p {
-      margin-bottom: 24px;
-    }
-    
-    .prose a {
-      color: var(--accent);
-      text-decoration: none;
-      border-bottom: 1px solid rgba(196,133,106,0.3);
-    }
-
-    .terminal-card {
-      background-color: var(--text);
-      color: var(--bg);
-      font-family: var(--font-mono);
-      font-size: 13px;
-      padding: 20px;
-      border-radius: 2px;
-      margin: 16px 0 32px 0;
-      display: block;
-      box-sizing: border-box;
-    }
-
-    footer {
-      text-align: center;
-      padding: 60px 0;
-      font-style: italic;
-      opacity: 0.6;
-      font-size: 16px;
-    }
-
-    @media (max-width: 768px) {
-      .hero-title {
-        font-size: 36px;
-      }
-      section {
-         padding: 40px 0;
-      }
-      nav {
-        padding: 24px;
-      }
-    }
-  </style>
+  <title>get started — iris</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="main.js" defer></script>
 </head>
-<body>
+<body class="get-started">
 
   <nav>
     <a href="index.html" class="nav-left">iris</a>
     <div class="nav-right">
       <a href="how-it-works.html">how it works</a>
+      <a href="visionsort.html">visionsort</a>
+      <a href="get-started.html" class="active">download</a>
       <a href="https://github.com/Carsk101/iris">github</a>
     </div>
   </nav>
 
-  <div class="container">
-    <h1 class="hero-title">get started</h1>
-
-    <section>
-      <h2 class="section-title">installation</h2>
-      <div class="prose">
-        <p>iris is built in rust and uses ffmpeg for orchestration. the easiest way to install it is via cargo.</p>
-        <code class="terminal-card">cargo install iris-cli</code>
-        <p>alternatively, you can download pre-compiled binaries for mac, linux, and windows from our <a href="https://github.com/Carsk101/iris/releases" target="_blank">releases page</a>.</p>
-      </div>
+  <main>
+    <section class="cover">
+      <h1 class="cover-title reveal visible">download</h1>
+      <p class="cover-subtitle reveal visible">binary and build.</p>
+      <div class="scroll-guide reveal visible"></div>
     </section>
 
-    <section>
-      <h2 class="section-title">usage</h2>
-      <div class="prose">
-        <p>the cli is designed to be as minimal and straightforward as the algorithm itself.</p>
-        
-        <p style="font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-style: italic; margin-bottom: -8px;">compressing data</p>
-        <code class="terminal-card">iris compress input.bin output.iris</code>
-
-        <p style="font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-style: italic; margin-bottom: -8px;">decompressing data</p>
-        <code class="terminal-card">iris decompress output.iris original.bin</code>
+    <div class="hero">
+      <div class="container">
+        <div class="hero-eyebrow reveal stagger-1">binary and build</div>
+        <h1 class="reveal stagger-2">build instructions and<br>native standalone binaries</h1>
+        <p class="hero-subtitle reveal stagger-3">iris is a standalone binary. zero runtime dependencies. zero friction.</p>
       </div>
-    </section>
+    </div>
 
-    <section>
-      <h2 class="section-title">system requirements</h2>
-      <div class="prose">
-        <p>ffmpeg: required as an orchestrator. ensure it has nvenc support and is in your path.</p>
-        <p>nvidia gpu: an rtx 4000+ unlocks blistering av1_nvenc hardware acceleration. rtx 3000 cards use hevc_nvenc.</p>
-        <p>cpu fallback: no gpu? iris seamlessly reroutes compression through your cpu using libx264.</p>
-      </div>
-    </section>
-  </div>
+    <div class="container">
+      <section class="reveal">
+        <h2 class="section-title">installation</h2>
+        <div class="prose reveal stagger-1">
+          <p>The easiest way to install iris is via cargo, the Rust package manager. This compiles the engine specifically for your hardware.</p>
+          <div class="terminal-card" style="margin: 32px 0;">
+            <code>cargo install iris-cli</code>
+          </div>
+          <p>Alternatively, you can download pre-compiled binaries for macOS, Linux, and Windows from our <a href="https://github.com/Carsk101/iris/releases" target="_blank" style="color: var(--accent); text-decoration: underline;">releases page</a>.</p>
+        </div>
+      </section>
+
+      <section class="reveal">
+        <h2 class="section-title">usage</h2>
+        <div class="prose reveal">
+          <p>The CLI is designed to be as minimal and straightforward as the algorithm itself.</p>
+          
+          <p style="font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-style: italic; margin-bottom: 8px;">compressing data</p>
+          <div class="terminal-card" style="margin-bottom: 32px;">
+            <code>iris compress input.bin output.iris</code>
+          </div>
+
+          <p style="font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-style: italic; margin-bottom: 8px;">decompressing data</p>
+          <div class="terminal-card">
+            <code>iris decompress output.iris original.bin</code>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal">
+        <h2 class="section-title">system requirements</h2>
+        <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 32px;">
+          <style>
+             @media (max-width: 900px) { .grid { grid-template-columns: 1fr !important; } }
+          </style>
+          <div class="card reveal stagger-1">
+            <div class="card-num">i</div>
+            <h3>zero dependencies</h3>
+            <p style="font-size: 15px; opacity: 0.8;">iris requires absolutely nothing to run. no ffmpeg, no cuda, no shared libraries. everything is statically linked.</p>
+          </div>
+          <div class="card reveal stagger-2">
+            <div class="card-num">ii</div>
+            <h3>cross-platform</h3>
+            <p style="font-size: 15px; opacity: 0.8;">fully native execution on macOS (Intel/M-series), Linux, and Windows. the entire codec stack is pure Rust.</p>
+          </div>
+          <div class="card reveal stagger-3">
+            <div class="card-num">iii</div>
+            <h3>memory bounds</h3>
+            <p style="font-size: 15px; opacity: 0.8;">iris streams data dynamically but requires at least 256MB of RAM for large block-matching context tables.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
 
   <footer>
-    built in rust. authored by harsh patel.
+    <div class="container footer-grid">
+      <div class="footer-col">
+        <a href="index.html" class="footer-logo">iris</a>
+        <p class="footer-tagline">A perception-first compression engine built in Rust. Structure first, codec second.</p>
+      </div>
+      <div class="footer-col">
+        <h4>project</h4>
+        <a href="how-it-works.html">how it works</a>
+        <a href="visionsort.html">visionsort</a>
+        <a href="get-started.html">download</a>
+      </div>
+      <div class="footer-col">
+        <h4>connect</h4>
+        <a href="https://github.com/Carsk101/iris">github</a>
+        <a href="http://harshswebsite.com" target="_blank">harsh patel</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>built in rust. authored by <a href="http://harshswebsite.com" target="_blank" style="color: inherit; text-decoration: underline;">harsh patel</a>.</p>
+    </div>
   </footer>
 
+  <script src="main.js"></script>
 </body>
 </html>

@@ -3,228 +3,126 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>how it works - iris</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&display=swap');
-
-    :root {
-      --bg: #F5F0E8;
-      --text: #1C3A2B;
-      --accent: #C4856A;
-      --card-bg: #FAF7F2;
-      --font-body: 'EB Garamond', serif;
-      --font-mono: 'DM Mono', monospace;
-    }
-
-    body::before {
-      content: "";
-      position: fixed;
-      top: 0; left: 0; width: 100vw; height: 100vh;
-      pointer-events: none;
-      z-index: 9999;
-      opacity: 0.03;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      background-color: var(--bg);
-      color: var(--text);
-      font-family: var(--font-body);
-      font-size: 18px;
-      line-height: 1.8;
-      margin: 0;
-      padding: 0;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    nav {
-      position: sticky;
-      top: 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 32px 48px;
-      z-index: 100;
-      background: var(--bg);
-    }
-
-    .nav-left {
-      font-family: var(--font-body);
-      font-style: italic;
-      font-size: 24px;
-      text-decoration: none;
-      color: var(--text);
-    }
-
-    .nav-right {
-      display: flex;
-      gap: 24px;
-    }
-
-    .nav-right a {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      text-transform: lowercase;
-      font-variant: small-caps;
-      text-decoration: none;
-      color: var(--text);
-      letter-spacing: 0.05em;
-    }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 0 32px 60px 32px;
-    }
-    
-    section {
-      padding: 60px 0;
-    }
-
-    .section-title {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--accent);
-      text-transform: lowercase;
-      font-variant: small-caps;
-      letter-spacing: 0.15em;
-      margin: 0 0 32px 0;
-      font-weight: normal;
-    }
-
-    .hero-title {
-      font-size: 48px;
-      line-height: 1.1;
-      font-weight: 400;
-      letter-spacing: 0.02em;
-      margin: 60px 0 20px 0;
-    }
-
-    .prose p {
-      margin-bottom: 24px;
-    }
-    
-    .prose a {
-      color: var(--accent);
-      text-decoration: none;
-      border-bottom: 1px solid rgba(196,133,106,0.3);
-    }
-
-    .terminal-card {
-      background-color: var(--text);
-      color: var(--bg);
-      font-family: var(--font-mono);
-      font-size: 13px;
-      padding: 20px;
-      border-radius: 2px;
-      margin: 16px 0 32px 0;
-      display: block;
-      box-sizing: border-box;
-    }
-
-    footer {
-      text-align: center;
-      padding: 60px 0;
-      font-style: italic;
-      opacity: 0.6;
-      font-size: 16px;
-    }
-
-    @media (max-width: 768px) {
-      .hero-title {
-        font-size: 36px;
-      }
-      section {
-         padding: 40px 0;
-      }
-      nav {
-        padding: 24px;
-      }
-    }
-  </style>
+  <title>how it works — iris</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="main.js" defer></script>
 </head>
-<body>
+<body class="how-it-works">
 
   <nav>
     <a href="index.html" class="nav-left">iris</a>
     <div class="nav-right">
+      <a href="how-it-works.html" class="active">how it works</a>
+      <a href="visionsort.html">visionsort</a>
       <a href="get-started.html">download</a>
       <a href="https://github.com/Carsk101/iris">github</a>
     </div>
   </nav>
 
-  <div class="container">
-    <h1 class="hero-title">how it works</h1>
-    
-    <section>
-      <h2 class="section-title">the architecture</h2>
-      <div class="prose">
-        <p>iris treats data compression as a perception problem. rather than applying a single algorithm to everything, it reads the dataset once, understands its structural profile, and routes the data through the stage best equipped to eliminate its specific redundancy.</p>
-      </div>
-
-      <!-- Diagram: Architecture Outline -->
-      <svg viewBox="0 0 600 200" style="width: 100%; height: auto; margin: 3em 0; stroke: var(--text); stroke-width: 1.5; fill: none; font-family: var(--font-body);">
-        <rect x="50" y="50" width="120" height="100" rx="2" style="fill: var(--card-bg); stroke: rgba(28,58,43,0.12); stroke-width: 1;" />
-        <text x="110" y="95" text-anchor="middle" font-size="16" stroke="none" fill="var(--text)" style="text-transform: lowercase;">profile</text>
-        <text x="110" y="120" text-anchor="middle" font-size="12" stroke="none" fill="var(--accent)" font-style="italic">measure entropy</text>
-
-        <path d="M180 100 L230 100" stroke="rgba(28,58,43,0.2)" stroke-width="1" />
-        <polygon points="230,100 225,97 225,103" fill="rgba(28,58,43,0.2)" stroke="none" />
-
-        <rect x="240" y="50" width="120" height="100" rx="2" style="fill: var(--card-bg); stroke: rgba(28,58,43,0.12); stroke-width: 1;"  />
-        <text x="300" y="95" text-anchor="middle" font-size="16" stroke="none" fill="var(--text)" style="text-transform: lowercase;">routing</text>
-        <text x="300" y="120" text-anchor="middle" font-size="12" stroke="none" fill="var(--accent)" font-style="italic">grammar & graph</text>
-
-        <path d="M370 100 L420 100" stroke="rgba(28,58,43,0.2)" stroke-width="1"  />
-        <polygon points="420,100 415,97 415,103" fill="rgba(28,58,43,0.2)" stroke="none" />
-
-        <rect x="430" y="50" width="120" height="100" rx="2" style="fill: var(--card-bg); stroke: rgba(28,58,43,0.12); stroke-width: 1;"  />
-        <text x="490" y="95" text-anchor="middle" font-size="16" stroke="none" fill="var(--text)" style="text-transform: lowercase;">encoding</text>
-        <text x="490" y="120" text-anchor="middle" font-size="12" stroke="none" fill="var(--accent)" font-style="italic">hardware / cpu</text>
-      </svg>
+  <main>
+    <section class="cover">
+      <h1 class="cover-title reveal visible">how it <br> works</h1>
+      <p class="cover-subtitle reveal visible">the engine's design.</p>
+      <div class="scroll-guide reveal visible"></div>
     </section>
 
-    <section>
-      <h2 class="section-title">profile & route</h2>
-      <div class="prose">
-        <p>a single read-only pass calculates byte entropy, autocorrelation at multiple lags, and block fingerprints. the system then routes the data dynamically.</p>
-        <p>structured text like csv decomposes via a column grammar into individually typed streams. binary data with a dominant period falls into wrapping i8 residuals via resonance.</p>
+    <div class="hero">
+      <div class="container">
+        <div class="hero-eyebrow reveal stagger-1">the anatomy of perception</div>
+        <h1 class="reveal stagger-2">the architecture of<br>unhurried compression</h1>
+        <p class="hero-subtitle reveal stagger-3">iris treats data compression as a perception problem. profile first, route second.</p>
       </div>
+    </div>
 
-<pre class="terminal-card"><code>// example of dynamic grammar routing
-struct colspec {
-    enc:        u8,
-    pfx:        vec&lt;u8&gt;,
-    sfx:        vec&lt;u8&gt;,
-    data:       vec&lt;u8&gt;,
-}</code></pre>
-    </section>
+    <div class="container">
+      <section class="reveal">
+        <h2 class="section-title">the perception pass</h2>
+        <div class="prose reveal stagger-1">
+          <p>Most compressors fail because they are blind. They apply the same sliding window or entropy coding regardless of what the data actually looks like.</p>
+          <p>iris takes the opposite approach: read the dataset once, understand its global structural profile, and only then route the data through the stage best suited to eliminate what it finds.</p>
+        </div>
+      </section>
 
-    <section>
-      <h2 class="section-title">prediction graph</h2>
-      <div class="prose">
-        <p>standard compressors like lz77 are constrained by a small sliding window. iris removes this limitation by finding similar blocks anywhere in the file via minhash fingerprints.</p>
-        <p>highly correlated structural blocks are matched regardless of physical distance and stored efficiently as xor deltas.</p>
-      </div>
-    </section>
+      <section class="reveal">
+        <h2 class="section-title">three phases</h2>
+        <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 32px;">
+          <style>
+             @media (max-width: 900px) { .grid { grid-template-columns: 1fr !important; } }
+          </style>
+          <div class="card reveal stagger-1">
+            <div class="card-num">i</div>
+            <h3>observe → profile</h3>
+            <p style="font-size: 15px;">A single read-only pass calculates byte entropy, autocorrelation at all lags up to 64, and block fingerprints. The profiler builds the context map that every subsequent stage uses.</p>
+          </div>
+          <div class="card reveal stagger-2">
+            <div class="card-num">ii</div>
+            <h3>decompose → router</h3>
+            <p style="font-size: 15px;">Structured text is routed to the Column Grammar engine. Periodic binary data hits the Resonance stage. Large-scale structural similarity is handled by the Prediction Graph.</p>
+          </div>
+          <div class="card reveal stagger-3">
+            <div class="card-num">iii</div>
+            <h3>pack → coder</h3>
+            <p style="font-size: 15px;">The final residuals—stripped of all identifiable structure—are packed via our internal pure-Rust rANS and Range Coding engines. Zero external libraries, just pure information theory.</p>
+          </div>
+        </div>
+      </section>
 
-    <section>
-      <h2 class="section-title">hardware encoding</h2>
-      <div class="prose">
-        <p>for data that remains highly entropic (&gt;0.80), the bytes are context-packed into frames and pushed to an nvidia gpu. the system negotiates av1_nvenc or hevc_nvenc.</p>
-        <p>if no suitable gpu is found, it falls back elegantly to the cpu using lossless libx264. near-constant residuals (&lt;0.15) bypass the gpu entirely and are packed via pure bwt+mtf.</p>
-      </div>
-    </section>
-  </div>
+      <section class="reveal">
+        <h2 class="section-title">prediction graph</h2>
+        <div class="reveal">
+          <p style="font-family: var(--font-mono); font-size: 12px; color: var(--accent); opacity: 0.6; margin-bottom: 8px;">the architecture</p>
+          <div class="card" style="padding: 48px;">
+            <p style="margin-bottom: 24px;">Traditional LZ77 compressors are trapped by a small sliding window (usually 32kb–1mb). If a block repeats 10mb away, they can't "see" it.</p>
+            <p style="margin-bottom: 24px;">iris removes this limit. Using SimHash fingerprints and LSH bands during the initial profile pass, the **Prediction Graph** identifies similar blocks regardless of their physical distance in the file.</p>
+            <p>Similar blocks are XOR-delta'd against their nearest neighbor, leaving a nearly-zero residual for the final coder.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal">
+        <h2 class="section-title">shared architecture</h2>
+        <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 80px;">
+          <div class="prose reveal">
+            <p>By moving the perception of the data to the very beginning, iris eliminates the need for expensive re-reads or complex back-tracking during compression.</p>
+            <p>The entire pipeline is built in pure Rust 1.75+, leveraging context-packing and range asymmetric numeral systems for maximum density.</p>
+          </div>
+          <div class="diagram reveal" style="border-left: 1px solid var(--accent); padding-left: 32px;">
+            <h4 style="font-family: var(--font-mono); font-size: 11px; font-variant: small-caps; color: var(--accent); margin-bottom: 24px;">pipeline flow</h4>
+            <ul style="list-style: none; font-family: var(--font-mono); font-size: 13px;">
+              <li style="margin-bottom: 12px;">→ phase 1: profile table</li>
+              <li style="margin-bottom: 12px;">→ phase 2: structural elimination</li>
+              <li style="margin-bottom: 12px;">→ phase 3: rANS pack</li>
+              <li>→ result: .iris standalone</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
 
   <footer>
-    built in rust. authored by harsh patel.
+    <div class="container footer-grid">
+      <div class="footer-col">
+        <a href="index.html" class="footer-logo">iris</a>
+        <p class="footer-tagline">A perception-first compression engine built in Rust. Structure first, codec second.</p>
+      </div>
+      <div class="footer-col">
+        <h4>project</h4>
+        <a href="how-it-works.html">how it works</a>
+        <a href="visionsort.html">visionsort</a>
+        <a href="get-started.html">download</a>
+      </div>
+      <div class="footer-col">
+        <h4>connect</h4>
+        <a href="https://github.com/Carsk101/iris">github</a>
+        <a href="http://harshswebsite.com" target="_blank">harsh patel</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>built in rust. authored by <a href="http://harshswebsite.com" target="_blank" style="color: inherit; text-decoration: underline;">harsh patel</a>.</p>
+    </div>
   </footer>
 
+  <script src="main.js"></script>
 </body>
 </html>
