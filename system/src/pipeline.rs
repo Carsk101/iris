@@ -154,7 +154,7 @@ pub fn compress(input: &Path, output: &Path) -> Result<()> {
         video_payload  = compressed;
         scatter_bytes  = vec![];
         ctx_hdr_bytes  = vec![];
-        encoder_byte   = 0xFF;
+        encoder_byte   = 0xFC;
         flags          |= FLAG_CONTEXT_PACK;
 
     } else if working_entropy2 < ZSTD_ROUTE_ENTROPY {
@@ -231,15 +231,19 @@ pub fn decompress(input: &Path, output: &Path) -> Result<()> {
 
     // ── Passthrough ───────────────────────────────────────────────────────
     if c.flags == 0 {
-        let dec = crate::rans::decode(&c.video)
-            .ok_or_else(|| anyhow::anyhow!("corrupt passthrough data"))?;
+        let dec = if c.encoder == 0xFB {
+            c.video.clone()
+        } else {
+            crate::rans::decode(&c.video)
+                .ok_or_else(|| anyhow::anyhow!("corrupt passthrough data"))?
+        };
         std::fs::write(output, &dec[..original_len.min(dec.len())])?;
         return Ok(());
     }
 
     // ── Decompress video/flat ─────────────────────────────────────────────
     let working = if c.has_context_pack() {
-        if c.ctx_hdr.is_empty() {
+        if c.encoder == 0xFC {
             // Ultra-compress: video = range-coded working data
             crate::range_coder::decode(&c.video)
                 .ok_or_else(|| anyhow::anyhow!("corrupt range-coded data"))?
@@ -321,12 +325,19 @@ pub fn info(input: &Path) -> Result<()> {
 }
 
 fn write_passthrough(data: &[u8], output: &Path) -> Result<()> {
+    let encoded = crate::rans::encode(data);
+    let (video_data, encoder_byte) = if encoded.len() >= data.len() {
+        (data.to_vec(), 0xFB)
+    } else {
+        (encoded, 0xFF)
+    };
+
     let c = IrisContainer {
-        encoder: 0xFF, flags: 0, original_len: data.len() as u64,
+        encoder: encoder_byte, flags: 0, original_len: data.len() as u64,
         byte0: data[0], original_byte0: data[0],
         resonance_hdr: vec![], grammar_data: vec![],
         pred_meta: vec![], scatter_map: vec![], ctx_hdr: vec![],
-        video: crate::rans::encode(data),
+        video: video_data,
     };
     let f = std::fs::File::create(output)?;
     c.write(&mut BufWriter::new(f))?;

@@ -161,13 +161,18 @@ pub fn decompress(compressed: &[u8]) -> Option<Vec<u8>> {
         data_len: usize,
     }
 
-    let payload_offset = read_u32(compressed, &mut p)? as usize;
-    let payload = crate::rans::decode(&compressed[p..p + payload_offset])?;
-    p += payload_offset;
+    let raw_len = read_u32(compressed, &mut p)? as usize;
+    let payload_raw = crate::rans::decode(&compressed[p..p + raw_len])?;
+    p += raw_len;
+
+    let delta_len = read_u32(compressed, &mut p)? as usize;
+    let payload_delta = crate::rans::decode(&compressed[p..p + delta_len])?;
+    p += delta_len;
 
     // Read block descriptors
     let mut blocks: Vec<BlockInfo> = Vec::with_capacity(n_blocks);
-    let mut dp = 0usize; // position into payload
+    let mut dp_raw = 0usize;
+    let mut dp_delta = 0usize;
     let desc_data = &compressed[p..];
     let mut dp2 = 0usize; // position into desc_data
 
@@ -178,8 +183,8 @@ pub fn decompress(compressed: &[u8]) -> Option<Vec<u8>> {
         let data_len = read_u16_slice(desc_data, &mut dp2)? as usize;
         let n_subs = desc_data.get(dp2).copied()? as usize; dp2 += 1;
 
-        let data_offset = dp;
-        dp += data_len;
+        let data_offset = if bt == BT_RAW { dp_raw } else { dp_delta };
+        if bt == BT_RAW { dp_raw += data_len; } else { dp_delta += data_len; }
 
         let mut subs = Vec::with_capacity(n_subs);
         for _ in 0..n_subs {
@@ -188,8 +193,10 @@ pub fn decompress(compressed: &[u8]) -> Option<Vec<u8>> {
             let s_len = read_u16_slice(desc_data, &mut dp2)?;
             let s_ref = read_u32_slice(desc_data, &mut dp2)?;
             let s_data_len = read_u16_slice(desc_data, &mut dp2)? as usize;
-            let s_data_offset = dp;
-            dp += s_data_len;
+            
+            let s_data_offset = if sbt == BT_RAW { dp_raw } else { dp_delta };
+            if sbt == BT_RAW { dp_raw += s_data_len; } else { dp_delta += s_data_len; }
+            
             subs.push(SubInfo {
                 block_type: sbt, offset: s_offset, len: s_len,
                 ref_idx: s_ref, data_offset: s_data_offset, data_len: s_data_len,
@@ -205,8 +212,11 @@ pub fn decompress(compressed: &[u8]) -> Option<Vec<u8>> {
     let mut decoded_blocks: Vec<Vec<u8>> = Vec::with_capacity(n_blocks);
 
     for bi in &blocks {
-        let block_data = payload.get(bi.data_offset..bi.data_offset + bi.data_len)
-            .unwrap_or(&[]);
+        let block_data = if bi.block_type == BT_RAW {
+            payload_raw.get(bi.data_offset..bi.data_offset + bi.data_len).unwrap_or(&[])
+        } else {
+            payload_delta.get(bi.data_offset..bi.data_offset + bi.data_len).unwrap_or(&[])
+        };
 
         match bi.block_type {
             BT_RAW => {
@@ -219,8 +229,11 @@ pub fn decompress(compressed: &[u8]) -> Option<Vec<u8>> {
 
                 // Apply sub-block refinements
                 for sub in &bi.subs {
-                    let sub_data = payload.get(sub.data_offset..sub.data_offset + sub.data_len)
-                        .unwrap_or(&[]);
+                    let sub_data = if sub.block_type == BT_RAW {
+                        payload_raw.get(sub.data_offset..sub.data_offset + sub.data_len).unwrap_or(&[])
+                    } else {
+                        payload_delta.get(sub.data_offset..sub.data_offset + sub.data_len).unwrap_or(&[])
+                    };
                     let s_off = sub.offset as usize;
                     let s_len = sub.len as usize;
 
@@ -260,8 +273,9 @@ pub fn decompress(compressed: &[u8]) -> Option<Vec<u8>> {
 // ─── Serialization ───────────────────────────────────────────────────────────
 
 fn serialize(blocks: &[EncodedBlock], orig_len: usize) -> Vec<u8> {
-    // Collect all block data into a single payload for rANS encoding
-    let mut payload = Vec::new();
+    // Collect block data into two separate payloads for rANS encoding: raw and delta
+    let mut raw_payload = Vec::new();
+    let mut delta_payload = Vec::new();
     let mut descriptors = Vec::new();
 
     for b in blocks {
@@ -271,7 +285,11 @@ fn serialize(blocks: &[EncodedBlock], orig_len: usize) -> Vec<u8> {
         descriptors.extend_from_slice(&(b.data.len() as u16).to_le_bytes());
         descriptors.push(b.sub_blocks.len() as u8);
 
-        payload.extend_from_slice(&b.data);
+        if b.block_type == BT_RAW {
+            raw_payload.extend_from_slice(&b.data);
+        } else {
+            delta_payload.extend_from_slice(&b.data);
+        }
 
         for sb in &b.sub_blocks {
             descriptors.push(sb.block_type);
@@ -279,18 +297,25 @@ fn serialize(blocks: &[EncodedBlock], orig_len: usize) -> Vec<u8> {
             descriptors.extend_from_slice(&sb.len.to_le_bytes());
             descriptors.extend_from_slice(&sb.ref_idx.to_le_bytes());
             descriptors.extend_from_slice(&(sb.data.len() as u16).to_le_bytes());
-            payload.extend_from_slice(&sb.data);
+            if sb.block_type == BT_RAW {
+                raw_payload.extend_from_slice(&sb.data);
+            } else {
+                delta_payload.extend_from_slice(&sb.data);
+            }
         }
     }
 
-    // rANS encode the payload (raw bytes + deltas together)
-    let encoded_payload = crate::rans::encode(&payload);
+    // rANS encode separately for better modeling
+    let enc_raw = crate::rans::encode(&raw_payload);
+    let enc_delta = crate::rans::encode(&delta_payload);
 
     let mut out = Vec::new();
     out.extend_from_slice(&(orig_len as u32).to_le_bytes());
     out.extend_from_slice(&(blocks.len() as u32).to_le_bytes());
-    out.extend_from_slice(&(encoded_payload.len() as u32).to_le_bytes());
-    out.extend_from_slice(&encoded_payload);
+    out.extend_from_slice(&(enc_raw.len() as u32).to_le_bytes());
+    out.extend_from_slice(&enc_raw);
+    out.extend_from_slice(&(enc_delta.len() as u32).to_le_bytes());
+    out.extend_from_slice(&enc_delta);
     out.extend_from_slice(&descriptors);
     out
 }
@@ -369,6 +394,10 @@ fn subdivide_block(
         let sub_fp = crate::pipeline::simhash_block(sub);
 
         // Search preceding blocks' sub-regions
+        // Note: We use brute force here instead of LSH. A 16-block lookback window 
+        // with 4 sub-blocks each means at most 64 SimHash comparisons per sub-block. 
+        // This is bounded and acceptable performance-wise. If the lookback window 
+        // is ever significantly raised, we should build an LSH index for sub-blocks. 
         let mut best_sub: Option<(u32, f64, Vec<u8>)> = None;
         let search_start = parent_idx.saturating_sub(16); // look back up to 16 blocks
         for prev_bi in search_start..parent_idx {

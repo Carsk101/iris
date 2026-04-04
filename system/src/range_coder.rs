@@ -28,12 +28,6 @@ impl FreqTable {
         for &b in data {
             freq[b as usize] += 1;
         }
-        // Ensure every symbol has at least frequency 1 for robustness
-        // (range coder requires non-zero frequencies for all possible symbols
-        //  that might appear during decode)
-        for f in &mut freq {
-            if *f == 0 { *f = 1; }
-        }
         let mut cum = [0u32; 257];
         for i in 0..256 {
             cum[i + 1] = cum[i] + freq[i];
@@ -76,11 +70,19 @@ pub fn encode(data: &[u8]) -> Vec<u8> {
     }
 
     let table = FreqTable::from_data(data);
-    let mut out = Vec::with_capacity(data.len() + 1028);
+    let mut out = Vec::with_capacity(data.len() + 256 * 5 + 6);
 
-    // Write frequency table (256 × u32-LE = 1024 bytes)
+    // Write frequency table (Sparse format)
+    let mut non_zero = Vec::new();
     for i in 0..256 {
-        out.extend_from_slice(&table.freq[i].to_le_bytes());
+        if table.freq[i] > 0 {
+            non_zero.push((i as u8, table.freq[i]));
+        }
+    }
+    out.extend_from_slice(&(non_zero.len() as u16).to_le_bytes());
+    for (sym, freq) in non_zero {
+        out.push(sym);
+        out.extend_from_slice(&freq.to_le_bytes());
     }
 
     // Write original length
@@ -127,31 +129,41 @@ pub fn decode(compressed: &[u8]) -> Option<Vec<u8>> {
     if compressed.is_empty() {
         return Some(vec![]);
     }
-    if compressed.len() < 1028 {
-        return None; // need at least freq table + length
+    if compressed.len() < 6 {
+        return None; // minimum header: 2 bytes count + 4 bytes length
     }
-
+    
+    let mut p = 0;
+    let count = u16::from_le_bytes(compressed[p..p+2].try_into().ok()?) as usize;
+    p += 2;
+    
+    if compressed.len() < p + count * 5 + 4 {
+        return None;
+    }
+    
     // Read frequency table
     let mut freq = [0u32; 256];
-    for i in 0..256 {
-        let off = i * 4;
-        freq[i] = u32::from_le_bytes(
-            compressed[off..off + 4].try_into().ok()?
-        );
+    for _ in 0..count {
+        let sym = compressed[p];
+        p += 1;
+        let f = u32::from_le_bytes(compressed[p..p+4].try_into().ok()?);
+        p += 4;
+        freq[sym as usize] = f;
     }
     let table = FreqTable::from_stored(freq);
     if table.total == 0 { return None; }
 
     // Read original length
     let orig_len = u32::from_le_bytes(
-        compressed[1024..1028].try_into().ok()?
+        compressed[p..p+4].try_into().ok()?
     ) as usize;
+    p += 4;
 
     if orig_len == 0 {
         return Some(vec![]);
     }
 
-    let stream = &compressed[1028..];
+    let stream = &compressed[p..];
 
     // Initialise decoder state
     let mut code: u64 = 0;
@@ -175,6 +187,12 @@ pub fn decode(compressed: &[u8]) -> Option<Vec<u8>> {
 
         let sym_low  = table.cum[sym as usize] as u64;
         let sym_high = table.cum[sym as usize + 1] as u64;
+
+        // Corruption safeguard: if a corrupt stream points to a zero-frequency symbol,
+        // it would collapse the range. Fail gracefully to avoid hanging or panicking.
+        if sym_low == sym_high {
+            return None;
+        }
 
         low   += sym_low * range;
         range *= sym_high - sym_low;
@@ -262,9 +280,9 @@ mod tests {
         data[500] = 1;
         data[3000] = 2;
         let enc = encode(&data);
-        // 1024 header + 4 len + very few encoded bytes
-        let payload = enc.len() - 1028;
-        // Theoretical entropy ≈ 0.003 bits/byte → ~4 bytes for 10k input
+        let payload = enc.len();
+        // Header length depends on unique symbols. For 3 symbols, header is 2 + 3*5 = 17 bytes + 4 = 21. 
+        // Then ~4 bytes encoded. Total < 100 easily.
         assert!(payload < 100,
             "expected near-zero payload, got {} bytes", payload);
     }
