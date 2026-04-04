@@ -20,9 +20,8 @@
   <main class="container">
     <section class="fade-in">
       <h2>installation</h2>
-      <div class="prose indent-large">
-        <p>Iris is built in Rust and uses AV1 for software-based encoding. The easiest way to install it is via cargo.</p>
-        
+      <div class="prose rhythm-1">
+        <p>Iris is built in Rust and uses FFmpeg for orchestration. The easiest way to install it is via cargo.</p>
 <pre><code>cargo install iris-cli</code></pre>
 
         <p>Alternatively, you can download pre-compiled binaries for Mac, Linux, and Windows from our <a href="https://github.com/Carsk101/visionsort/releases" target="_blank">releases page</a>.</p>
@@ -44,9 +43,10 @@
 
     <section class="fade-in">
       <h2>system requirements</h2>
-      <div class="prose indent-large">
-        <p>Any modern machine. By using AV1 software encoding (like SVT-AV1) instead of hardware-specific solutions, iris avoids tying you to a specific vendor pool.</p>
-        <p>It runs on Mac, Linux, Windows, AMD, Intel, and Apple Silicon. No GPU is required. If your machine can surf the modern web, it can run iris.</p>
+      <div class="prose rhythm-2">
+        <p>FFmpeg: Required as an orchestrator. Ensure it has NVENC support and is in your PATH.</p>
+        <p>NVIDIA GPU: An RTX 4000+ unlocks blistering av1_nvenc hardware acceleration. RTX 3000 cards use hevc_nvenc.</p>
+        <p>CPU Fallback: No GPU? Iris seamlessly reroutes compression through your CPU using libsvtav1.</p>
       </div>
     </section>
   </main>

@@ -1,0 +1,162 @@
+/// iris v2 container — varint-delta scatter encoding
+use std::io::{Read, Write};
+use anyhow::{Result, bail};
+
+pub const MAGIC:   &[u8; 4] = b"IRS2";
+pub const VERSION: u8       = 2;
+pub const FLAG_RESONANCE:    u8 = 0b0001;
+pub const FLAG_GRAMMAR:      u8 = 0b0010;
+pub const FLAG_PRED_GRAPH:   u8 = 0b0100;
+pub const FLAG_CONTEXT_PACK: u8 = 0b1000;
+
+pub struct IrisContainer {
+    pub encoder:        u8,
+    pub flags:          u8,
+    pub original_len:   u64,
+    pub byte0:          u8,
+    pub original_byte0: u8,
+    pub resonance_hdr:  Vec<u8>,
+    pub grammar_data:   Vec<u8>,
+    pub pred_meta:      Vec<u8>,
+    pub scatter_map:    Vec<u8>,
+    pub ctx_hdr:        Vec<u8>,
+    pub video:          Vec<u8>,
+}
+
+impl IrisContainer {
+    pub fn has_resonance(&self)    -> bool { self.flags & FLAG_RESONANCE    != 0 }
+    pub fn has_grammar(&self)      -> bool { self.flags & FLAG_GRAMMAR      != 0 }
+    pub fn has_pred_graph(&self)   -> bool { self.flags & FLAG_PRED_GRAPH   != 0 }
+    pub fn has_context_pack(&self) -> bool { self.flags & FLAG_CONTEXT_PACK != 0 }
+
+    pub fn write<W: Write>(&self, w: &mut W) -> Result<()> {
+        w.write_all(MAGIC)?;
+        w.write_all(&[VERSION, self.encoder, self.flags, 0u8])?;
+        w.write_all(&self.original_len.to_le_bytes())?;
+        w.write_all(&[self.byte0, self.original_byte0])?;
+        for chunk in &[&self.resonance_hdr, &self.grammar_data, &self.pred_meta,
+                       &self.scatter_map, &self.ctx_hdr, &self.video] {
+            write_chunk(w, chunk)?;
+        }
+        Ok(())
+    }
+
+    pub fn read<R: Read>(r: &mut R) -> Result<Self> {
+        let mut magic = [0u8; 4]; r.read_exact(&mut magic)?;
+        if &magic != MAGIC { bail!("not an iris v2 file"); }
+        let mut hdr = [0u8; 4]; r.read_exact(&mut hdr)?;
+        if hdr[0] != VERSION { bail!("unsupported version {}", hdr[0]); }
+        let mut lb = [0u8; 8]; r.read_exact(&mut lb)?;
+        let original_len = u64::from_le_bytes(lb);
+        let mut b = [0u8; 2]; r.read_exact(&mut b)?;
+        Ok(Self {
+            encoder: hdr[1], flags: hdr[2], original_len,
+            byte0: b[0], original_byte0: b[1],
+            resonance_hdr: read_chunk(r)?,
+            grammar_data:  read_chunk(r)?,
+            pred_meta:     read_chunk(r)?,
+            scatter_map:   read_chunk(r)?,
+            ctx_hdr:       read_chunk(r)?,
+            video:         read_chunk(r)?,
+        })
+    }
+}
+
+fn write_chunk<W: Write>(w: &mut W, d: &[u8]) -> Result<()> {
+    w.write_all(&(d.len() as u32).to_le_bytes())?;
+    if !d.is_empty() { w.write_all(d)?; }
+    Ok(())
+}
+
+fn read_chunk<R: Read>(r: &mut R) -> Result<Vec<u8>> {
+    let mut lb = [0u8; 4]; r.read_exact(&mut lb)?;
+    let len = u32::from_le_bytes(lb) as usize;
+    if len == 0 { return Ok(vec![]); }
+    let mut buf = vec![0u8; len]; r.read_exact(&mut buf)?;
+    Ok(buf)
+}
+
+// ── Varint helpers ────────────────────────────────────────────────────────────
+
+fn write_varint(buf: &mut Vec<u8>, mut n: u64) {
+    loop {
+        if n < 0x80 { buf.push(n as u8); break; }
+        buf.push((n as u8 & 0x7f) | 0x80);
+        n >>= 7;
+    }
+}
+
+fn read_varint(data: &[u8], pos: &mut usize) -> Option<u64> {
+    let mut result = 0u64;
+    let mut shift  = 0u32;
+    loop {
+        if *pos >= data.len() { return None; }
+        let byte = data[*pos]; *pos += 1;
+        result |= ((byte & 0x7f) as u64) << shift;
+        if byte & 0x80 == 0 { return Some(result); }
+        shift += 7;
+        if shift >= 64 { return None; }
+    }
+}
+
+/// Serialize scatter map as varint-delta compressed with zstd.
+/// Positions within each bucket are in appearance order (monotone increasing).
+/// Delta-varint: for nearly uniform positions (stride ≈ n_contexts),
+/// all deltas ≈ same small integer → zstd compresses to ~bytes.
+pub fn serialize_scatter(lists: &[Vec<u32>]) -> Result<Vec<u8>> {
+    let mut varint_buf = Vec::with_capacity(lists.len() * 4 + 16);
+    write_varint(&mut varint_buf, lists.len() as u64);
+    for list in lists {
+        write_varint(&mut varint_buf, list.len() as u64);
+        let mut prev = 0u32;
+        for &pos in list {
+            write_varint(&mut varint_buf, (pos.saturating_sub(prev)) as u64);
+            prev = pos;
+        }
+    }
+    eprintln!("[iris] scatter varint: {}B", varint_buf.len());
+    let compressed = zstd::encode_all(std::io::Cursor::new(&varint_buf), 22)?;
+    eprintln!("[iris] scatter zstd:   {}B", compressed.len());
+    Ok(compressed)
+}
+
+pub fn deserialize_scatter(compressed: &[u8]) -> Result<Vec<Vec<u32>>> {
+    if compressed.is_empty() { return Ok(vec![]); }
+    let raw = zstd::decode_all(std::io::Cursor::new(compressed))?;
+    let mut pos = 0;
+    let n_lists = read_varint(&raw, &mut pos).unwrap_or(0) as usize;
+    let mut lists = Vec::with_capacity(n_lists);
+    for _ in 0..n_lists {
+        let len = read_varint(&raw, &mut pos).unwrap_or(0) as usize;
+        let mut list = Vec::with_capacity(len);
+        let mut prev = 0u32;
+        for _ in 0..len {
+            let delta = read_varint(&raw, &mut pos).unwrap_or(0) as u32;
+            prev += delta;
+            list.push(prev);
+        }
+        lists.push(list);
+    }
+    Ok(lists)
+}
+
+pub fn serialize_pred_meta(metas: &[crate::prediction::BlockMeta]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(metas.len() * 17 + 4);
+    out.extend_from_slice(&(metas.len() as u32).to_le_bytes());
+    for m in metas { out.extend_from_slice(&m.serialize()); }
+    out
+}
+
+pub fn deserialize_pred_meta(data: &[u8]) -> Option<Vec<crate::prediction::BlockMeta>> {
+    if data.len() < 4 { return Some(vec![]); }
+    let n = u32::from_le_bytes(data[0..4].try_into().ok()?) as usize;
+    let mut metas = Vec::with_capacity(n);
+    let mut pos = 4;
+    for _ in 0..n {
+        metas.push(crate::prediction::BlockMeta::deserialize(&data[pos..])?);
+        pos += 17;
+    }
+    Some(metas)
+}
+
+pub const FLAG_COLUMNAR: u8 = 0b0001_0000;
