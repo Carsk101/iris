@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
   <link rel="stylesheet" href="styles.css">
   <script src="main.js" defer></script>
 </head>
+
 <body class="how-it-works">
 
   <nav>
@@ -30,7 +32,8 @@
       <div class="container">
         <div class="hero-eyebrow reveal stagger-1">the anatomy of perception</div>
         <h1 class="reveal stagger-2">the architecture of<br>unhurried compression</h1>
-        <p class="hero-subtitle reveal stagger-3">iris treats data compression as a perception problem. profile first, route second.</p>
+        <p class="hero-subtitle reveal stagger-3">iris treats data compression as a perception problem. profile first,
+          route second.</p>
       </div>
     </div>
 
@@ -38,8 +41,10 @@
       <section class="reveal">
         <h2 class="section-title">the perception pass</h2>
         <div class="prose reveal stagger-1">
-          <p>Most compressors fail because they are blind. They apply the same sliding window or entropy coding regardless of what the data actually looks like.</p>
-          <p>iris takes the opposite approach: read the dataset once, understand its global structural profile, and only then route the data through the stage best suited to eliminate what it finds.</p>
+          <p>Most compressors fail because they are blind. They apply the same sliding window or entropy coding
+            regardless of what the data actually looks like.</p>
+          <p>iris takes the opposite approach: read the dataset once, understand its global structural profile, and only
+            then route the data through the stage best suited to eliminate what it finds.</p>
         </div>
       </section>
 
@@ -47,22 +52,54 @@
         <h2 class="section-title">three phases</h2>
         <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 32px;">
           <style>
-             @media (max-width: 900px) { .grid { grid-template-columns: 1fr !important; } }
+            @media (max-width: 900px) {
+              .grid {
+                grid-template-columns: 1fr !important;
+              }
+            }
           </style>
           <div class="card reveal stagger-1">
             <div class="card-num">i</div>
             <h3>observe → profile</h3>
-            <p style="font-size: 15px;">A single read-only pass calculates byte entropy, autocorrelation at all lags up to 64, and block fingerprints. The profiler builds the context map that every subsequent stage uses.</p>
+            <p style="font-size: 15px;">A single read-only pass calculates byte entropy, autocorrelation at all lags up
+              to 64, and block fingerprints. The profiler builds the context map that every subsequent stage uses.</p>
           </div>
           <div class="card reveal stagger-2">
             <div class="card-num">ii</div>
             <h3>decompose → router</h3>
-            <p style="font-size: 15px;">Structured text is routed to the Column Grammar engine. Periodic binary data hits the Resonance stage. Large-scale structural similarity is handled by the Prediction Graph.</p>
+            <p style="font-size: 15px;">Structured text is routed to the Column Grammar engine. Periodic binary data
+              hits the Resonance stage. Large-scale structural similarity is handled by the Prediction Graph.</p>
           </div>
           <div class="card reveal stagger-3">
             <div class="card-num">iii</div>
             <h3>pack → coder</h3>
-            <p style="font-size: 15px;">The final residuals—stripped of all identifiable structure—are packed via our internal pure-Rust rANS and Range Coding engines. Zero external libraries, just pure information theory.</p>
+            <p style="font-size: 15px;">The final residuals—stripped of all identifiable structure—are packed via our
+              internal pure-Rust rANS and Range Coding engines. Zero external libraries, just pure information theory.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal">
+        <h2 class="section-title">nearsorted.bin</h2>
+        <div class="reveal">
+          <p
+            style="font-family: var(--font-mono); font-size: 12px; color: var(--accent); opacity: 0.6; margin-bottom: 8px;">
+            the pipeline in practice</p>
+          <div class="card" style="padding: 48px;">
+            <p style="margin-bottom: 24px;"><strong>phase i (profile)</strong>: The read-only profiler builds the context
+              map. <span style="font-family: var(--font-mono); color: var(--accent);">autocorrelation</span> peaks at
+              <span style="font-family: var(--font-mono); color: var(--accent);">lag=4</span>. The <span
+                style="font-family: var(--font-mono); color: var(--accent);">running_surprise</span> metric remains
+              near 0.02, identifying a high-resonance target.</p>
+            <p style="margin-bottom: 24px;"><strong>phase ii (eliminate)</strong>: The Resonance extraction engine fires at
+              lag=4. The residual is <span style="font-family: var(--font-mono); color: var(--accent);">data[i]
+                wrapping_sub data[i-4]</span>. The structural periodicity is stripped, leaving a nearly-zero residual
+              stream.</p>
+            <p><strong>phase iii (pack)</strong>: The final 4MB of residuals are squashed into 9,857 bytes by the internal
+              rANS engine. Final ratio: <span
+                style="font-family: var(--font-mono); color: var(--accent); font-weight: 500; font-size: 20px;">405x</span>.
+            </p>
           </div>
         </div>
       </section>
@@ -70,11 +107,113 @@
       <section class="reveal">
         <h2 class="section-title">prediction graph</h2>
         <div class="reveal">
-          <p style="font-family: var(--font-mono); font-size: 12px; color: var(--accent); opacity: 0.6; margin-bottom: 8px;">the architecture</p>
-          <div class="card" style="padding: 48px;">
-            <p style="margin-bottom: 24px;">Traditional LZ77 compressors are trapped by a small sliding window (usually 32kb–1mb). If a block repeats 10mb away, they can't "see" it.</p>
-            <p style="margin-bottom: 24px;">iris removes this limit. Using SimHash fingerprints and LSH bands during the initial profile pass, the **Prediction Graph** identifies similar blocks regardless of their physical distance in the file.</p>
-            <p>Similar blocks are XOR-delta'd against their nearest neighbor, leaving a nearly-zero residual for the final coder.</p>
+          <p
+            style="font-family: var(--font-mono); font-size: 12px; color: var(--accent); opacity: 0.6; margin-bottom: 8px;">
+            the architecture</p>
+          <div class="card" style="padding: 48px; border-left: 2px solid var(--accent);">
+            <p style="margin-bottom: 24px;">Traditional LZ77 compressors are trapped by a small sliding window (usually
+              32kb–1mb). If a block repeats 10mb away, they can't "see" it.</p>
+            <p style="margin-bottom: 24px;">iris removes this limit. Using SimHash fingerprints and LSH bands during the
+              initial profile pass, the **Prediction Graph** identifies similar blocks regardless of their physical
+              distance in the file.</p>
+            <p style="margin-bottom: 48px;">Similar blocks are XOR-delta'd against their nearest neighbor, leaving a nearly-zero residual for the
+              final coder.</p>
+
+            <!-- Visual Graph Integration v2: The Blueprint -->
+            <div class="tree-container" style="display: flex; gap: 56px; overflow-x: auto; padding-top: 48px; border-top: 1px solid rgba(196, 133, 106, 0.08);">
+              <style>
+                .node {
+                  font-family: var(--font-mono);
+                  font-size: 10px;
+                  padding: 12px 14px;
+                  border: 1px solid rgba(196, 133, 106, 0.15);
+                  margin-bottom: 12px;
+                  position: relative;
+                  white-space: nowrap;
+                  letter-spacing: 0.1em;
+                  text-transform: lowercase;
+                  color: var(--text-muted);
+                }
+                .node.raw {
+                  background: rgba(196, 133, 106, 0.03);
+                  border-color: var(--accent);
+                  color: var(--text);
+                  font-weight: 500;
+                }
+                .node.delta {
+                  border-style: dotted;
+                  opacity: 0.8;
+                }
+                .node-meta {
+                  position: absolute;
+                  top: -16px;
+                  left: 0;
+                  font-size: 8px;
+                  font-style: italic;
+                  opacity: 0.4;
+                  white-space: nowrap;
+                }
+                .branch {
+                  padding-left: 28px;
+                  border-left: 1px solid rgba(196, 133, 106, 0.1);
+                  margin-left: 8px;
+                  position: relative;
+                }
+                /* Blueprint L-Connector Junction Dot */
+                .branch::after {
+                  content: "";
+                  position: absolute;
+                  left: -3px;
+                  top: 16px;
+                  width: 5px;
+                  height: 5px;
+                  border-radius: 50%;
+                  background: var(--accent);
+                  opacity: 0.2;
+                }
+                .branch::before {
+                  content: "";
+                  position: absolute;
+                  left: -28px;
+                  top: 19px;
+                  width: 28px;
+                  height: 1px;
+                  background: rgba(196, 133, 106, 0.1);
+                }
+              </style>
+
+              <!-- Group 0 -->
+              <div class="reveal stagger-1">
+                <div class="node-meta">profile anchor</div>
+                <div class="node raw">[block 0] raw</div>
+                <div class="branch reveal stagger-2">
+                  <div class="node delta">block 1 (Δ) <span style="font-size: 8px; opacity: 0.4;">residue: 0.04%</span></div>
+                  <div class="node delta">block 3 (Δ) <span style="font-size: 8px; opacity: 0.4;">residue: 0.01%</span></div>
+                  <div class="node delta">block 4 (Δ)</div>
+                  <div class="branch reveal stagger-3">
+                    <div class="node delta">block 5 (Δ) <span style="font-size: 8px; opacity: 0.4;">cascading</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Group 2 -->
+              <div class="reveal stagger-2" style="margin-top: 12px;">
+                <div class="node-meta">profile anchor</div>
+                <div class="node raw">[block 2] raw</div>
+                <div class="branch reveal stagger-3">
+                  <div class="node delta">block 6 (Δ)</div>
+                </div>
+              </div>
+
+              <!-- Group 7 -->
+              <div class="reveal stagger-3" style="margin-top: 24px;">
+                <div class="node-meta" style="color: var(--accent); opacity: 0.8;">global simhash match (+12MB)</div>
+                <div class="node raw">[block 7] raw</div>
+                <div class="branch reveal stagger-4">
+                  <div class="node delta">block 8 (Δ)</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -83,11 +222,15 @@
         <h2 class="section-title">shared architecture</h2>
         <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 80px;">
           <div class="prose reveal">
-            <p>By moving the perception of the data to the very beginning, iris eliminates the need for expensive re-reads or complex back-tracking during compression.</p>
-            <p>The entire pipeline is built in pure Rust 1.75+, leveraging context-packing and range asymmetric numeral systems for maximum density.</p>
+            <p>By moving the perception of the data to the very beginning, iris eliminates the need for expensive
+              re-reads or complex back-tracking during compression.</p>
+            <p>The entire pipeline is built in pure Rust 1.75+, leveraging context-packing and range asymmetric numeral
+              systems for maximum density.</p>
           </div>
           <div class="diagram reveal" style="border-left: 1px solid var(--accent); padding-left: 32px;">
-            <h4 style="font-family: var(--font-mono); font-size: 11px; font-variant: small-caps; color: var(--accent); margin-bottom: 24px;">pipeline flow</h4>
+            <h4
+              style="font-family: var(--font-mono); font-size: 11px; font-variant: small-caps; color: var(--accent); margin-bottom: 24px;">
+              pipeline flow</h4>
             <ul style="list-style: none; font-family: var(--font-mono); font-size: 13px;">
               <li style="margin-bottom: 12px;">→ phase 1: profile table</li>
               <li style="margin-bottom: 12px;">→ phase 2: structural elimination</li>
@@ -104,7 +247,8 @@
     <div class="container footer-grid">
       <div class="footer-col">
         <a href="index.html" class="footer-logo">iris</a>
-        <p class="footer-tagline">A perception-first compression engine built in Rust. Structure first, codec second.</p>
+        <p class="footer-tagline">A perception-first compression engine built in Rust. Structure first, codec second.
+        </p>
       </div>
       <div class="footer-col">
         <h4>project</h4>
@@ -119,10 +263,12 @@
       </div>
     </div>
     <div class="footer-bottom">
-      <p>built in rust. authored by <a href="http://harshswebsite.com" target="_blank" style="color: inherit; text-decoration: underline;">harsh patel</a>.</p>
+      <p>built in rust. authored by <a href="http://harshswebsite.com" target="_blank"
+          style="color: inherit; text-decoration: underline;">harsh patel</a>.</p>
     </div>
   </footer>
 
   <script src="main.js"></script>
 </body>
+
 </html>
