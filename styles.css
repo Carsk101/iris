@@ -178,7 +178,7 @@ h1 {
 body:not(.home) .cover {
   min-height: 60vh;
   height: auto;
-  padding: 160px 0 80px;
+  padding: 160px 0 160px;
 }
 
 body:not(.home) .scroll-guide {
@@ -191,7 +191,7 @@ body:not(.home) .scroll-guide {
 }
 
 body:not(.home) .hero {
-  padding-top: 0;
+  padding-top: 100px;
 }
 
 .cover-title {
@@ -321,7 +321,12 @@ footer {
   h1 { font-size: 48px; }
   section { padding: 80px 0; }
   .footer-grid { grid-template-columns: 1fr; gap: 40px; }
-  nav { padding: 24px; flex-direction: column; align-items: flex-start; gap: 24px; }
+  nav { 
+    padding: calc(env(safe-area-inset-top, 0px) + 24px) 24px 24px 24px; 
+    flex-direction: column; 
+    align-items: flex-start; 
+    gap: 24px; 
+  }
   .nav-right { gap: 16px; flex-wrap: wrap; }
 }
 
@@ -402,7 +407,8 @@ body.version-salience .base-only {
   margin-top: -8px; /* overlap to bridge the gap with padding-bottom */
 }
 
-.version-custom-select:hover .version-options {
+.version-custom-select:hover .version-options,
+.version-custom-select.open .version-options {
   display: block;
   animation: fadeIn 0.2s var(--ease);
 }
