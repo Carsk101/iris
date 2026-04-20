@@ -50,8 +50,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 parentDropdown.style.display = 'none';
                 setTimeout(() => { parentDropdown.style.display = ''; }, 100);
             }
+            
+            const selectContainer = e.target.closest('.version-custom-select');
+            if (selectContainer) {
+                selectContainer.classList.remove('open');
+            }
         });
     });
+
+    // Touch support for version dropdown on mobile
+    const customSelect = document.querySelector('.version-custom-select');
+    if (customSelect) {
+        customSelect.addEventListener('click', (e) => {
+            customSelect.classList.toggle('open');
+            e.stopPropagation();
+        });
+        document.addEventListener('click', () => {
+            customSelect.classList.remove('open');
+        });
+    }
 
     // Intersection Observer for scroll reveal animations
     const revealOptions = {
