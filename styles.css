@@ -61,7 +61,7 @@ nav {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 32px 48px;
+  padding: calc(env(safe-area-inset-top, 0px) + 32px) calc(env(safe-area-inset-right, 0px) + 48px) 32px calc(env(safe-area-inset-left, 0px) + 48px);
   z-index: 1000;
   background: rgba(245, 240, 232, 0.95);
   backdrop-filter: blur(10px);
