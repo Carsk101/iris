@@ -121,7 +121,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // At the very top
             if (!isHome) nav.classList.add('visible');
             else nav.classList.remove('visible');
-        } else if (currentScrollY > lastScrollY && currentScrollY > 100) {
+            lastScrollY = currentScrollY;
+            return;
+        } 
+        
+        if (Math.abs(currentScrollY - lastScrollY) < 15) {
+            return;
+        }
+
+        if (currentScrollY > lastScrollY && currentScrollY > 100) {
             // Scrolling down
             nav.classList.remove('visible');
         } else if (currentScrollY < lastScrollY) {
