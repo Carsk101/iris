@@ -14,8 +14,19 @@
   <nav>
     <a href="index.html" class="nav-left">iris</a>
     <div class="nav-right">
+      <div class="version-dropdown">
+        <span class="label">version:</span>
+        <div class="version-custom-select">
+          <span class="version-current">iris</span>
+          <div class="version-options">
+            <div class="version-option" data-value="base">iris</div>
+            <div class="version-option" data-value="salience">iris + salience</div>
+          </div>
+        </div>
+      </div>
       <a href="how-it-works.html" class="active">how it works</a>
       <a href="visionsort.html">visionsort</a>
+      <a href="salience.html" class="salience-only">salience</a>
       <a href="get-started.html">download</a>
       <a href="https://github.com/Carsk101/iris">github</a>
     </div>
@@ -74,7 +85,9 @@
             <div class="card-num">iii</div>
             <h3>pack → coder</h3>
             <p style="font-size: 15px;">The final residuals—stripped of all identifiable structure—are packed via our
-              internal pure-Rust rANS and Range Coding engines. Zero external libraries, just pure information theory.
+              internal pure-Rust rANS and Range Coding engines.
+              <span class="salience-only" style="color: var(--accent); display: inline;">In tensor mode, Salience scores accurately guide which sub-coder to use per block. </span>
+              Zero external libraries, just pure information theory.
             </p>
           </div>
         </div>
@@ -233,6 +246,7 @@
               pipeline flow</h4>
             <ul style="list-style: none; font-family: var(--font-mono); font-size: 13px;">
               <li style="margin-bottom: 12px;">→ phase 1: profile table</li>
+              <li style="margin-bottom: 12px; color: var(--accent);" class="salience-only">→ phase 1.5: salience map (tensor block routing)</li>
               <li style="margin-bottom: 12px;">→ phase 2: structural elimination</li>
               <li style="margin-bottom: 12px;">→ phase 3: rANS pack</li>
               <li>→ result: .iris standalone</li>
@@ -254,6 +268,7 @@
         <h4>project</h4>
         <a href="how-it-works.html">how it works</a>
         <a href="visionsort.html">visionsort</a>
+        <a href="salience.html" class="salience-only" style="display: block;">salience</a>
         <a href="get-started.html">download</a>
       </div>
       <div class="footer-col">

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>salience — iris</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="main.js" defer></script>
+</head>
+<body class="salience">
+
+  <nav>
+    <a href="index.html" class="nav-left">iris</a>
+    <div class="nav-right">
+      <div class="version-dropdown">
+        <span class="label">version:</span>
+        <div class="version-custom-select">
+          <span class="version-current">iris</span>
+          <div class="version-options">
+            <div class="version-option" data-value="base">iris</div>
+            <div class="version-option" data-value="salience">iris + salience</div>
+          </div>
+        </div>
+      </div>
+      <a href="how-it-works.html">how it works</a>
+      <a href="visionsort.html">visionsort</a>
+      <a href="salience.html" class="salience-only active">salience</a>
+      <a href="get-started.html">download</a>
+      <a href="https://github.com/Carsk101/iris">github</a>
+    </div>
+  </nav>
+
+  <main>
+    <section class="cover">
+      <h1 class="cover-title reveal visible">salience</h1>
+      <p class="cover-subtitle reveal visible">noticing the structure before striking.</p>
+      <div class="scroll-guide reveal visible"></div>
+    </section>
+
+    <div class="hero">
+      <div class="container">
+        <div class="hero-eyebrow reveal stagger-1">stage 0.5: perception upgraded</div>
+        <h1 class="reveal stagger-2">weaponizing statistics<br>without leaving a scratch</h1>
+        <p class="hero-subtitle reveal stagger-3">deep learning weights and scientific arrays are practically invisible to legacy compressors. salience teaches iris to see them.</p>
+      </div>
+    </div>
+
+    <div class="container">
+
+      <section class="reveal">
+        <h2 class="section-title">what's in a name?</h2>
+        <div class="prose reveal stagger-1">
+          <p>In visual perception, <em>salience</em> is the quality that makes an object stand out from its neighbors. When you enter a room or look at a photograph, your eyes do not scan linearly from left to right. They dart immediately to the most salient features—high contrasts, sharp edges, isolated anomalies.</p>
+          <p>Data compression is a perception problem. Salience (Stage 0.5) is the mechanism that allows iris to look deeply at a stream of raw bytes and instinctively <strong>"notice" what is statistically prominent</strong> before making a move.</p>
+          <p>It prevents iris from compressing a multi-gigabyte Tensor blindly and instead allows it to draw a rich topographical map of where the heavy tails, outliers, and dense informational spikes live.</p>
+        </div>
+      </section>
+
+      <section class="reveal">
+        <h2 class="section-title">why we built it</h2>
+        <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 80px;">
+          <div class="prose reveal">
+            <p>Modern datasets are dominated by heavy numeric arrays: FP16 and BF16 model weights, FP32 scientific manifolds, and multidimensional arrays.</p>
+            <p>Traditional algorithms (like Deflate or Zstd) struggle profoundly here. Float entropy looks practically indistinguishable from white noise if you lack the numerical context. The industry responded by either punting with minimal dictionary overlaps, or resorting to aggressive <strong>lossy quantization</strong> that actively destroys inference accuracy.</p>
+            <p><strong>This shouldn't be a compromise.</strong> Salience was introduced as Stage 0.5 to bridge the gap. We wanted the staggering compression ratios of a deep numeric analytics engine, while refusing to break the strict lossless oath of the iris container.</p>
+          </div>
+          <div class="diagram reveal" style="border-left: 1px solid var(--accent); padding-left: 32px;">
+            <p style="font-family: var(--font-body); font-style: italic; font-size: 17px; margin-bottom: 24px;">
+              "salience maps the mountains so the router doesn't have to guess."
+            </p>
+            <ul style="list-style: none; font-family: var(--font-mono); font-size: 13px; color: var(--text);">
+              <li style="margin-bottom: 12px; opacity: 0.5;">→ traditional: blindly encode bytes</li>
+              <li style="margin-bottom: 12px; opacity: 0.5;">→ lossy: drop decimal bits entirely</li>
+              <li style="color: var(--accent);">→ iris: map saliency & shift structural routes</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal">
+        <h2 class="section-title">how it works</h2>
+        <div class="reveal">
+          <p style="font-family: var(--font-mono); font-size: 12px; color: var(--accent); opacity: 0.6; margin-bottom: 8px;">the mechanics of stage 0.5</p>
+          <div class="card" style="padding: 48px; border-left: 2px dotted var(--accent);">
+            
+            <h4 style="font-family: var(--font-mono); font-size: 12px; font-variant: small-caps; color: var(--accent); margin-bottom: 12px;">1. tensor detection</h4>
+            <p style="margin-bottom: 32px;">During the Stage 0 profiler's single read-only pass, it calculates autocorrelation lags across wrap-around i8 differences. If it observes a massive resonance peak exactly at <strong>lag 2</strong>, it flags the presence of FP16/BF16 data. A peak at <strong>lag 4</strong> signals FP32. If no such peak is found, the data is not a tensor, and Salience goes back to sleep entirely—ensuring zero overhead for standard CSVs or logs.</p>
+            
+            <h4 style="font-family: var(--font-mono); font-size: 12px; font-variant: small-caps; color: var(--accent); margin-bottom: 12px;">2. semantic block scoring</h4>
+            <p style="margin-bottom: 32px;">Once awake, Salience slices the data logically into 4KB blocks (e.g., 2,048 weights per block). For each block, it runs a blazing fast single-pass Welford statistical analysis measuring the <strong>mean, variance, kurtosis, and outlier ratio</strong> (weights > 3σ from the mean). It synthesizes these into a normalized Saliency Score between 0 and 1.</p>
+            
+            <h4 style="font-family: var(--font-mono); font-size: 12px; font-variant: small-caps; color: var(--accent); margin-bottom: 12px;">3. layer-aware grouping</h4>
+            <p style="margin-bottom: 32px;">Model weights aren't random; they are structured sequentially in layers (Attention Q/K/V, Feed Forward, Norms). Salience measures the KL-divergence, or "distribution shift," between adjacent blocks. Sharp deviations act as natural boundaries, allowing it to mathematically infer layer transitions without any external schema files.</p>
+            
+            <h4 style="font-family: var(--font-mono); font-size: 12px; font-variant: small-caps; color: var(--accent); margin-bottom: 12px;">4. biased routing</h4>
+            <p>This topographical chunk of metadata (the SaliencyMap) gets serialized ahead of the block data. When the standard iris compression stages fire (Resonance, Stride Grammar, Prediction Graph), they read the map. A highly salient `attn_qkv` block gets routed to robust, match-protected entropy chains. A low-salience, near-Gaussian `ffn_down` block experiences ferocious dictionary compression. The map tells them exactly when to push harder.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal">
+        <h2 class="section-title">the strict lossless protocol</h2>
+        <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 32px;">
+          <style>@media (max-width: 900px) { .grid { grid-template-columns: 1fr !important; } }</style>
+          <div class="card reveal stagger-1">
+            <div class="card-num">i</div>
+            <h3>pure metadata</h3>
+            <p style="font-size: 15px;">Salience never alters the value matrix. It does not quantize. It does not approximate. It just leaves notes for the router so it knows what's coming.</p>
+          </div>
+          <div class="card reveal stagger-2">
+            <div class="card-num">ii</div>
+            <h3>bit-for-bit parity</h3>
+            <p style="font-size: 15px;">The final encoded container (IRS2/v3) outputs a string of bytes that decode to the exact, bit-identical mathematical floats initialized on your machine.</p>
+          </div>
+          <div class="card reveal stagger-3">
+            <div class="card-num">iii</div>
+            <h3>streaming access</h3>
+            <p style="font-size: 15px;">The layer boundary flags afford the container a streaming read API. You can extract <code>"layer_12.attn_qkv"</code> seamlessly without inflating the entire file.</p>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="container footer-grid">
+      <div class="footer-col">
+        <a href="index.html" class="footer-logo">iris</a>
+        <p class="footer-tagline">A perception-first compression engine built in Rust. Structure first, codec second.</p>
+      </div>
+      <div class="footer-col">
+        <h4>project</h4>
+        <a href="how-it-works.html">how it works</a>
+        <a href="visionsort.html">visionsort</a>
+        <a href="salience.html" class="salience-only" style="display: block;">salience</a>
+        <a href="get-started.html">download</a>
+      </div>
+      <div class="footer-col">
+        <h4>connect</h4>
+        <a href="https://github.com/Carsk101/iris">github</a>
+        <a href="http://harshswebsite.com" target="_blank">harsh patel</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>built in rust. authored by <a href="http://harshswebsite.com" target="_blank" style="color: inherit; text-decoration: underline;">harsh patel</a>.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

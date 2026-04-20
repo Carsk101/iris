@@ -322,3 +322,111 @@ footer {
   nav { padding: 24px; }
   .nav-right { gap: 16px; }
 }
+
+/* Version States */
+body:not(.version-salience) .salience-only {
+  display: none !important;
+}
+
+body.version-salience .base-only {
+  display: none !important;
+}
+
+.version-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: lowercase;
+  font-variant: small-caps;
+  color: var(--text);
+  letter-spacing: 0.08em;
+  margin-right: 16px;
+  border-right: 1px solid rgba(28, 58, 43, 0.1);
+  padding-right: 24px;
+}
+
+@media (max-width: 768px) {
+  .version-dropdown {
+    margin-right: 8px;
+    padding-right: 12px;
+  }
+}
+
+.version-dropdown span.label {
+  opacity: 0.5;
+}
+
+.version-custom-select {
+  position: relative;
+  cursor: pointer;
+  color: var(--accent);
+  padding-right: 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%23C4856A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right center;
+  padding-bottom: 24px; /* padding for the hover bridge */
+  margin-bottom: -24px;
+}
+
+.version-current {
+  transition: opacity 0.3s var(--ease);
+}
+
+.version-custom-select:hover .version-current {
+  opacity: 0.8;
+}
+
+.version-options {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: var(--bg);
+  border: 1px solid rgba(28, 58, 43, 0.1);
+  border-radius: 2px;
+  padding: 8px 0;
+  min-width: 140px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(28, 58, 43, 0.05);
+  margin-top: -8px; /* overlap to bridge the gap with padding-bottom */
+}
+
+.version-custom-select:hover .version-options {
+  display: block;
+  animation: fadeIn 0.2s var(--ease);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.version-option {
+  padding: 6px 16px;
+  color: var(--text);
+  transition: color 0.3s var(--ease), background 0.3s var(--ease);
+}
+
+.version-option:hover {
+  color: var(--accent);
+  background: rgba(28, 58, 43, 0.03);
+}
+
+.salience-badge {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(196, 133, 106, 0.08);
+  color: var(--accent);
+  padding: 4px 10px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  vertical-align: middle;
+  margin-left: 12px;
+  border: 1px solid rgba(196, 133, 106, 0.2);
+}

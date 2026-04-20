@@ -13,8 +13,19 @@
   <nav>
     <a href="index.html" class="nav-left">iris</a>
     <div class="nav-right">
+      <div class="version-dropdown">
+        <span class="label">version:</span>
+        <div class="version-custom-select">
+          <span class="version-current">iris</span>
+          <div class="version-options">
+            <div class="version-option" data-value="base">iris</div>
+            <div class="version-option" data-value="salience">iris + salience</div>
+          </div>
+        </div>
+      </div>
       <a href="how-it-works.html">how it works</a>
       <a href="visionsort.html">visionsort</a>
+      <a href="salience.html" class="salience-only">salience</a>
       <a href="get-started.html">download</a>
       <a href="https://github.com/Carsk101/iris">github</a>
     </div>
@@ -30,7 +41,7 @@
     <div class="hero">
       <div class="container">
         <div class="hero-eyebrow reveal stagger-1">perception first</div>
-        <h1 class="reveal stagger-2">compression that<br>sees the data</h1>
+        <h1 class="reveal stagger-2">compression that<br>sees the data<span class="salience-only salience-badge">+ salience active</span></h1>
         <p class="hero-subtitle reveal stagger-3">iris profiles before it compresses. structure first, codec second.</p>
         <div class="hero-code reveal stagger-4">
           <div class="terminal-card">
@@ -75,7 +86,7 @@
       </section>
 
       <section class="reveal">
-        <h2 class="section-title">five stages</h2>
+        <h2 class="section-title"><span class="base-only">five</span><span class="salience-only">six</span> stages</h2>
         <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px;">
           <style>
              .card { margin-bottom: 16px; }
@@ -86,22 +97,27 @@
             <h3>profile</h3>
             <p>a single read-only pass measures entropy, autocorrelation at 64 lags, and block fingerprints. nothing is read twice.</p>
           </div>
-          <div class="card reveal stagger-2">
+          <div class="card reveal stagger-2 salience-only" style="border-left: 2px solid var(--accent); background: rgba(196, 133, 106, 0.02);">
+            <div class="card-num" style="color: var(--accent);">0.5</div>
+            <h3 style="color: var(--accent);">salience</h3>
+            <p>detects tensor_mode. computes a strictly lossless per-block saliency map and infers layer chunks to influence routing without altering values.</p>
+          </div>
+          <div class="card reveal stagger-3">
             <div class="card-num">02</div>
             <h3>column grammar</h3>
             <p>structured text is decomposed by column. enums become dict indices. the result approaches the information-theoretic minimum.</p>
           </div>
-          <div class="card reveal stagger-1">
+          <div class="card reveal stagger-4">
             <div class="card-num">03</div>
             <h3>resonance</h3>
             <p>periodic structure is extracted via wrapping i8 delta at the dominant lag. data with a strong period compresses to near-zero residual.</p>
           </div>
-          <div class="card reveal stagger-2">
+          <div class="card reveal stagger-5">
             <div class="card-num">04</div>
             <h3>prediction graph</h3>
             <p>similar blocks found via SimHash and LSH bands. no window limit. similar blocks stored as XOR deltas. lz77 can't do this.</p>
           </div>
-          <div class="card reveal stagger-1" style="grid-column: 1 / -1; max-width: 460px; margin: 0 auto;">
+          <div class="card reveal stagger-6" style="grid-column: 1 / -1; max-width: 460px; margin: 0 auto;">
             <div class="card-num">05</div>
             <h3>route</h3>
             <p>final entropy decides the pure-rust codec. rANS, range-coding, or hierarchical block matching. zero external dependencies.</p>
@@ -141,6 +157,7 @@
         <h4>project</h4>
         <a href="how-it-works.html">how it works</a>
         <a href="visionsort.html">visionsort</a>
+        <a href="salience.html" class="salience-only" style="display: block;">salience</a>
         <a href="get-started.html">download</a>
       </div>
       <div class="footer-col">
