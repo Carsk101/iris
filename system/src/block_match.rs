@@ -54,6 +54,14 @@ struct EncodedSubBlock {
 
 /// Compress data using hierarchical block matching + rANS.
 /// This is the native replacement for the AV1 route.
+///
+/// Scalability notes:
+///   * 4 KB SimHashes are computed once up front (O(n) bits ≈ 64 × n/4 ops).
+///   * 1 KB sub-block SimHashes are also computed once up front, avoiding
+///     the O(n²) re-hash the old `subdivide_block` did inside its inner
+///     lookup loop.
+///   * Neighbor search at both levels goes through an LSH index keyed on
+///     4 × 16-bit bands of the 64-bit SimHash.
 pub fn compress(data: &[u8]) -> Vec<u8> {
     if data.is_empty() {
         return vec![];
@@ -62,11 +70,16 @@ pub fn compress(data: &[u8]) -> Vec<u8> {
     let n = data.len();
     let n_blocks_4k = (n + BLOCK_4K - 1) / BLOCK_4K;
 
-    // Compute SimHash fingerprints at all three resolutions
+    // Compute SimHash fingerprints at both resolutions up front.
+    // Memory: (n/4096 + n/1024) × 8 bytes ≈ 0.01 × n bytes.
     let fps_4k = compute_fingerprints(data, BLOCK_4K);
+    let fps_1k = compute_fingerprints(data, BLOCK_1K);
+    let subs_per_parent_1k = BLOCK_4K / BLOCK_1K; // 4
 
-    // LSH index for 4KB blocks
+    // LSH indexes.
     let mut lsh_4k: Vec<HashMap<u16, Vec<usize>>> =
+        (0..4).map(|_| HashMap::new()).collect();
+    let mut lsh_1k: Vec<HashMap<u16, Vec<usize>>> =
         (0..4).map(|_| HashMap::new()).collect();
 
     let mut all_blocks: Vec<EncodedBlock> = Vec::with_capacity(n_blocks_4k);
@@ -77,7 +90,6 @@ pub fn compress(data: &[u8]) -> Vec<u8> {
         let block = &data[b_start..b_end];
         let fp = fps_4k[bi];
 
-        // Try to find a 4KB match
         let best_4k = find_match(&lsh_4k, fp, &fps_4k, bi);
 
         if let Some((ref_idx, _sim)) = best_4k {
@@ -91,11 +103,18 @@ pub fn compress(data: &[u8]) -> Vec<u8> {
 
             if block_h - delta_h >= DELTA_MIN_GAIN {
                 if delta_h > SUBDIVIDE_ENTROPY && block.len() >= BLOCK_1K * 2 {
-                    // Subdivide: try 1KB sub-blocks
-                    let sub_blocks = subdivide_block(
-                        data, block, bi, BLOCK_1K, &lsh_4k, &fps_4k, n,
+                    let sub_blocks = subdivide_block_lsh(
+                        data, bi, BLOCK_1K, &lsh_1k, &fps_1k, n,
                     );
                     insert_lsh(&mut lsh_4k, fp, bi);
+                    // Now register this parent's 1 KB sub-blocks for
+                    // future parents to match against.
+                    for si in 0..subs_per_parent_1k {
+                        let idx = bi * subs_per_parent_1k + si;
+                        if idx < fps_1k.len() {
+                            insert_lsh(&mut lsh_1k, fps_1k[idx], idx);
+                        }
+                    }
                     all_blocks.push(EncodedBlock {
                         block_type: BT_DELTA_4K,
                         data: delta,
@@ -105,8 +124,13 @@ pub fn compress(data: &[u8]) -> Vec<u8> {
                     continue;
                 }
 
-                // Good 4KB delta
                 insert_lsh(&mut lsh_4k, fp, bi);
+                for si in 0..subs_per_parent_1k {
+                    let idx = bi * subs_per_parent_1k + si;
+                    if idx < fps_1k.len() {
+                        insert_lsh(&mut lsh_1k, fps_1k[idx], idx);
+                    }
+                }
                 all_blocks.push(EncodedBlock {
                     block_type: BT_DELTA_4K,
                     data: delta,
@@ -117,8 +141,13 @@ pub fn compress(data: &[u8]) -> Vec<u8> {
             }
         }
 
-        // No good match — store raw
         insert_lsh(&mut lsh_4k, fp, bi);
+        for si in 0..subs_per_parent_1k {
+            let idx = bi * subs_per_parent_1k + si;
+            if idx < fps_1k.len() {
+                insert_lsh(&mut lsh_1k, fps_1k[idx], idx);
+            }
+        }
         all_blocks.push(EncodedBlock {
             block_type: BT_RAW,
             data: block.to_vec(),
@@ -127,7 +156,6 @@ pub fn compress(data: &[u8]) -> Vec<u8> {
         });
     }
 
-    // Serialize to byte stream
     serialize(&all_blocks, n)
 }
 
@@ -371,63 +399,83 @@ fn insert_lsh(lsh: &mut [HashMap<u16, Vec<usize>>], fp: u64, idx: usize) {
     }
 }
 
-fn subdivide_block(
+/// LSH-backed sub-block search. `fps_sub` is the pre-computed SimHash
+/// array for every `sub_size`-aligned block in the file; `lsh_sub` is
+/// the running LSH index built as we visit parents.
+///
+/// The `ref_idx` we emit uses the SAME packing as the original
+/// implementation — `prev_parent_bi * (BLOCK_4K/sub_size) + sub_idx` —
+/// so the on-disk format is unchanged.
+fn subdivide_block_lsh(
     full_data: &[u8],
-    _parent_block: &[u8],
     parent_idx: usize,
     sub_size: usize,
-    _lsh: &[HashMap<u16, Vec<usize>>],
-    _fps: &[u64],
+    lsh_sub: &[HashMap<u16, Vec<usize>>],
+    fps_sub: &[u64],
     n: usize,
 ) -> Vec<EncodedSubBlock> {
     let parent_start = parent_idx * BLOCK_4K;
     let parent_end = (parent_start + BLOCK_4K).min(n);
     let parent = &full_data[parent_start..parent_end];
-    let n_subs = (parent.len() + sub_size - 1) / sub_size;
+    let subs_per_parent = BLOCK_4K / sub_size;
+    let n_subs_here = (parent.len() + sub_size - 1) / sub_size;
     let mut subs = Vec::new();
 
-    // For each sub-block, check if any preceding parent's sub-block is similar
-    for si in 0..n_subs {
+    for si in 0..n_subs_here {
         let s_start = si * sub_size;
         let s_end = (s_start + sub_size).min(parent.len());
         let sub = &parent[s_start..s_end];
-        let sub_fp = crate::pipeline::simhash_block(sub);
+        let fp_idx = parent_idx * subs_per_parent + si;
+        if fp_idx >= fps_sub.len() { continue; }
+        let sub_fp = fps_sub[fp_idx];
 
-        // Search preceding blocks' sub-regions
-        // Note: We use brute force here instead of LSH. A 16-block lookback window 
-        // with 4 sub-blocks each means at most 64 SimHash comparisons per sub-block. 
-        // This is bounded and acceptable performance-wise. If the lookback window 
-        // is ever significantly raised, we should build an LSH index for sub-blocks. 
-        let mut best_sub: Option<(u32, f64, Vec<u8>)> = None;
-        let search_start = parent_idx.saturating_sub(16); // look back up to 16 blocks
-        for prev_bi in search_start..parent_idx {
-            let prev_start = prev_bi * BLOCK_4K;
-            let prev_end = (prev_start + BLOCK_4K).min(n);
-            let prev_block = &full_data[prev_start..prev_end];
-
-            for prev_si in 0..((prev_block.len() + sub_size - 1) / sub_size) {
-                let ps_start = prev_si * sub_size;
-                let ps_end = (ps_start + sub_size).min(prev_block.len());
-                let prev_sub = &prev_block[ps_start..ps_end];
-                let prev_fp = crate::pipeline::simhash_block(prev_sub);
-
-                let sim = simhash_similarity(sub_fp, prev_fp);
-                if sim >= MATCH_THRESHOLD {
-                    let delta = xor_delta(sub, prev_sub);
-                    let dh = byte_entropy(&delta);
-                    let sh = byte_entropy(sub);
-                    if sh - dh >= DELTA_MIN_GAIN {
-                        let ref_id = prev_bi as u32 * (BLOCK_4K as u32 / sub_size as u32)
-                                   + prev_si as u32;
-                        if best_sub.as_ref().map_or(true, |(_, s, _)| sim > *s) {
-                            best_sub = Some((ref_id, sim, delta));
-                        }
+        // Candidate lookup via LSH over the four 16-bit bands. We bound
+        // the candidate set to stop pathological inputs from turning
+        // this into O(total_subs) per sub.
+        const MAX_CANDIDATES: usize = 32;
+        let mut candidates: Vec<usize> = Vec::with_capacity(MAX_CANDIDATES);
+        for band in 0..4 {
+            let sig = band_sig(sub_fp, band);
+            if let Some(list) = lsh_sub[band].get(&sig) {
+                for &ri in list.iter().rev() {
+                    if candidates.len() >= MAX_CANDIDATES { break; }
+                    if ri >= fp_idx { continue; } // past-only
+                    // parent containing ri must be strictly earlier.
+                    let ri_parent = ri / subs_per_parent;
+                    if ri_parent >= parent_idx { continue; }
+                    if !candidates.contains(&ri) {
+                        candidates.push(ri);
                     }
                 }
+                if candidates.len() >= MAX_CANDIDATES { break; }
             }
         }
 
-        if let Some((ref_id, _, delta)) = best_sub {
+        let mut best: Option<(u32, f64, Vec<u8>)> = None;
+        for &ri in &candidates {
+            let sim = simhash_similarity(sub_fp, fps_sub[ri]);
+            if sim < MATCH_THRESHOLD { continue; }
+
+            let ri_parent = ri / subs_per_parent;
+            let ri_sub    = ri % subs_per_parent;
+            let rs_start  = ri_parent * BLOCK_4K + ri_sub * sub_size;
+            let rs_end    = (rs_start + sub_size).min(n);
+            if rs_end <= rs_start { continue; }
+            let prev_sub = &full_data[rs_start..rs_end];
+
+            let delta = xor_delta(sub, prev_sub);
+            let dh = byte_entropy(&delta);
+            let sh = byte_entropy(sub);
+            if sh - dh < DELTA_MIN_GAIN { continue; }
+
+            let ref_id = ri_parent as u32 * (BLOCK_4K as u32 / sub_size as u32)
+                       + ri_sub as u32;
+            if best.as_ref().map_or(true, |(_, s, _)| sim > *s) {
+                best = Some((ref_id, sim, delta));
+            }
+        }
+
+        if let Some((ref_id, _, delta)) = best {
             let bt = if sub_size == BLOCK_1K { BT_DELTA_1K } else { BT_DELTA_256 };
             subs.push(EncodedSubBlock {
                 block_type: bt,
@@ -437,7 +485,6 @@ fn subdivide_block(
                 ref_idx: ref_id,
             });
         }
-        // If no good sub-match, the parent delta stands as-is for this region
     }
 
     subs

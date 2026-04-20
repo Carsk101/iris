@@ -22,6 +22,11 @@ pub const PRED_MIN_GAIN:       f64   = 0.15;   // delta must be ≥15% smaller t
 /// Blocks sharing any band signature are candidate neighbors.
 const NUM_BANDS: usize = 4; // 4 bands × 16 bits each
 
+/// Cap on candidates evaluated per block. Prevents a pathological LSH
+/// bucket (e.g. a file with thousands of identical 4 KB runs) from
+/// turning neighbor search into O(n²).
+const MAX_CANDIDATES_PER_BLOCK: usize = 32;
+
 #[derive(Debug, Clone)]
 pub enum BlockEncoding {
     /// Stored as-is (incompressible or no good reference found)
@@ -56,22 +61,26 @@ pub fn build(data: &[u8], fingerprints: &[u64]) -> Vec<BlockEncoding> {
         let block       = &data[block_start..block_end];
         let fp          = fingerprints[block_idx];
 
-        // Collect candidate references from LSH bands
+        // Collect candidate references from LSH bands. The candidate set
+        // is capped so a pathological LSH bucket can't turn this loop
+        // into O(n²). `seen` uses a small HashSet for O(1) dedup.
         let mut best_ref: Option<(usize, f64)> = None;
-        let mut seen = Vec::new(); // avoid re-checking same candidate
+        let mut seen: std::collections::HashSet<usize> =
+            std::collections::HashSet::with_capacity(MAX_CANDIDATES_PER_BLOCK);
 
-        for band in 0..NUM_BANDS {
+        'cand: for band in 0..NUM_BANDS {
             let sig = band_signature(fp, band);
             if let Some(candidates) = band_tables[band].get(&sig) {
-                for &ri in candidates {
-                    if seen.contains(&ri) { continue; }
-                    seen.push(ri);
+                // Iterate most-recently-inserted first — locality bias.
+                for &ri in candidates.iter().rev() {
+                    if !seen.insert(ri) { continue; }
                     let sim = fingerprint_similarity(fp, fingerprints[ri]);
                     if sim >= PRED_SIMILARITY_MIN {
                         if best_ref.map_or(true, |(_, s)| sim > s) {
                             best_ref = Some((ri, sim));
                         }
                     }
+                    if seen.len() >= MAX_CANDIDATES_PER_BLOCK { break 'cand; }
                 }
             }
         }

@@ -1,4 +1,58 @@
+// Version State Management
+const savedVersion = localStorage.getItem('iris_version') || 'base';
+if (savedVersion === 'salience') {
+    // We add to documentElement in case body isn't parsed yet
+    document.documentElement.classList.add('version-salience');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    // Ensure body respects the state
+    if (savedVersion === 'salience') {
+        document.body.classList.add('version-salience');
+    }
+
+    const currentLabels = document.querySelectorAll('.version-current');
+    const optionBtns = document.querySelectorAll('.version-option');
+    const navLefts = document.querySelectorAll('.nav-left');
+
+    const updateUIs = (version) => {
+        navLefts.forEach(nav => {
+            nav.textContent = version === 'salience' ? 'iris + salience' : 'iris';
+        });
+        currentLabels.forEach(label => {
+            label.textContent = version === 'salience' ? 'iris + salience' : 'iris';
+        });
+    };
+
+    // Initial update
+    updateUIs(savedVersion);
+
+    optionBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            // Prevent default just in case, though it's a div
+            e.preventDefault();
+            const newVersion = e.currentTarget.getAttribute('data-value');
+            localStorage.setItem('iris_version', newVersion);
+            
+            if (newVersion === 'salience') {
+                document.documentElement.classList.add('version-salience');
+                document.body.classList.add('version-salience');
+            } else {
+                document.documentElement.classList.remove('version-salience');
+                document.body.classList.remove('version-salience');
+            }
+            
+            updateUIs(newVersion);
+            
+            // Force hide the dropdown momentarily to reset hover state
+            const parentDropdown = e.target.closest('.version-options');
+            if (parentDropdown) {
+                parentDropdown.style.display = 'none';
+                setTimeout(() => { parentDropdown.style.display = ''; }, 100);
+            }
+        });
+    });
+
     // Intersection Observer for scroll reveal animations
     const revealOptions = {
         root: null,

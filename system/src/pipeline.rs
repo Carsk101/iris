@@ -3,7 +3,9 @@ use std::path::Path;
 use std::time::Instant;
 use anyhow::{Result, Context};
 
-use crate::profile::{self, StageGate};
+use crate::profile;
+use crate::gate::{AdaptiveGate, StageDecision};
+use crate::lag_cache::LagCache;
 use crate::resonance;
 use crate::grammar;
 use crate::prediction;
@@ -11,9 +13,54 @@ use crate::context_pack;
 use crate::container::{self, IrisContainer,
     FLAG_RESONANCE, FLAG_GRAMMAR, FLAG_PRED_GRAPH, FLAG_CONTEXT_PACK};
 
+// ── Routing thresholds (kept as named constants so they show up in logs) ──
 const ZSTD_ROUTE_ENTROPY:      f64 = 0.80;
 const ULTRA_COMPRESS_ENTROPY:  f64 = 0.15;
 const MAX_RESONANCE_PASSES:    usize = 3;
+
+/// IrisContainer framing overhead: magic + version + lengths + CRC32.
+/// Used for the passthrough-guard comparisons.
+const CONTAINER_FRAMING: usize = 46;
+
+/// Environment variable that selects a pre-baked `AdaptiveGate` profile.
+/// Accepts `default` (production) or `genomic` (the research profile that
+/// is biased toward firing structural stages on medium-entropy scientific
+/// data). Unknown values fall back to `default`.
+pub const IRIS_GATE_ENV: &str = "IRIS_GATE";
+
+fn gate_from_env() -> AdaptiveGate {
+    match std::env::var(IRIS_GATE_ENV).as_deref() {
+        Ok("genomic") | Ok("research") => AdaptiveGate::genomic_research(),
+        _ => AdaptiveGate::default(),
+    }
+}
+
+// ── Lightweight stage instrumentation ────────────────────────────────────────
+
+struct StageReport {
+    name:        &'static str,
+    fired:       bool,
+    elapsed_ms:  f64,
+    bytes_in:    usize,
+    bytes_out:   usize,
+    entropy_in:  f64,
+    entropy_out: f64,
+}
+
+impl StageReport {
+    fn log(&self) {
+        if !self.fired { return; }
+        let ratio = if self.bytes_out > 0 {
+            self.bytes_in as f64 / self.bytes_out as f64
+        } else { 1.0 };
+        eprintln!(
+            "[iris][stage] {:<10} fired={} {:>8}B→{:>8}B ({:>5.2}x) H={:.3}→{:.3} {:>6.1}ms",
+            self.name, self.fired as u8,
+            self.bytes_in, self.bytes_out, ratio,
+            self.entropy_in, self.entropy_out, self.elapsed_ms
+        );
+    }
+}
 
 pub fn compress(input: &Path, output: &Path) -> Result<()> {
     let t0 = Instant::now();
@@ -25,42 +72,65 @@ pub fn compress(input: &Path, output: &Path) -> Result<()> {
     let original_byte0 = data[0];
 
     // ── Column grammar fast-path (before profiling) ───────────────────────
+    //
+    // `infer_columns` gates on "does column grammar produce fewer bytes
+    // than the original?"; we still double-check the serialized output
+    // including container framing here, so a degenerate column spec can
+    // never make the compressed file bigger than the raw input. If it
+    // doesn't meaningfully beat raw, we fall through to the profile
+    // path where resonance / prediction / entropy coders can still
+    // produce a useful result.
     if let Some(cg) = grammar::infer_columns(&data) {
-        let col_sz: usize = cg.specs.iter().map(|s| s.data.len()+s.aux.len()+s.aux2.len()).sum();
-        eprintln!("[iris] column grammar: delim='{}' cols={} cov={:.0}% → ~{}B ({:.2}x)",
-            cg.delimiter as char, cg.num_cols, cg.coverage*100.0, col_sz,
-            original_len as f64 / col_sz as f64);
         let grammar_bytes = grammar::serialize_columns(&cg);
-        let c = IrisContainer {
-            encoder: 0xFE, flags: FLAG_GRAMMAR,
-            original_len: original_len as u64,
-            byte0: original_byte0, original_byte0,
-            resonance_hdr: vec![], grammar_data: grammar_bytes,
-            pred_meta: vec![], scatter_map: vec![], ctx_hdr: vec![], video: vec![],
-        };
-        let f = std::fs::File::create(output)?;
-        c.write(&mut BufWriter::new(f))?;
-        let sz = std::fs::metadata(output)?.len() as usize;
-        eprintln!("[iris] done {:.1}ms | {}→{}B | {:.3}x | flags={:04b}",
-            t0.elapsed().as_secs_f64()*1000.0,
-            original_len, sz, original_len as f64/sz as f64, FLAG_GRAMMAR);
-        return Ok(());
+        if grammar_bytes.len() + CONTAINER_FRAMING < original_len {
+            let col_sz: usize = cg.specs.iter()
+                .map(|s| s.data.len()+s.aux.len()+s.aux2.len()).sum();
+            eprintln!("[iris] column grammar: delim='{}' cols={} cov={:.0}% → ~{}B ({:.2}x)",
+                cg.delimiter as char, cg.num_cols, cg.coverage*100.0, col_sz,
+                original_len as f64 / col_sz as f64);
+            let c = IrisContainer {
+                encoder: 0xFE, flags: FLAG_GRAMMAR,
+                original_len: original_len as u64,
+                byte0: original_byte0, original_byte0,
+                resonance_hdr: vec![], grammar_data: grammar_bytes,
+                pred_meta: vec![], scatter_map: vec![], ctx_hdr: vec![], video: vec![],
+            };
+            let f = std::fs::File::create(output)?;
+            c.write(&mut BufWriter::new(f))?;
+            let sz = std::fs::metadata(output)?.len() as usize;
+            eprintln!("[iris] done {:.1}ms | {}→{}B | {:.3}x | flags={:04b}",
+                t0.elapsed().as_secs_f64()*1000.0,
+                original_len, sz, original_len as f64/sz as f64, FLAG_GRAMMAR);
+            return Ok(());
+        }
+        eprintln!("[iris] column grammar produced {}B ≥ raw {}B → falling through to profile path",
+            grammar_bytes.len(), original_len);
     }
 
-    // ── Stage 0: Profile ──────────────────────────────────────────────────
-    let prof = profile::profile(&data);
-    let gate = StageGate::from_profile(&prof);
-    eprintln!("[iris] H={:.3} D={:.3} acc={:.3} | R={} G={} P={} C={}",
-        prof.global_entropy, prof.global_disorder, prof.prediction_accuracy,
-        gate.resonance as u8, gate.grammar as u8,
-        gate.prediction_graph as u8, gate.context_pack as u8);
+    // ── Stage 0: Profile (sampling-based — bounded ≤ 64 KB) ──────────────
+    let t_prof = Instant::now();
+    let prof = profile::profile_fast(&data);
+    let prof_ms = t_prof.elapsed().as_secs_f64() * 1000.0;
+
+    let gate_cfg = gate_from_env();
+    let decision: StageDecision = gate_cfg.decide(&prof);
+    eprintln!(
+        "[iris] profile ({:.1}ms sample={}B): H={:.3} Hσ={:.3} skew={:+.2} stab={:.2} D={:.3} acc={:.3}",
+        prof_ms, prof.sample_bytes,
+        prof.global_entropy, prof.local_entropy_stddev, prof.byte_skewness,
+        prof.autocorr_peak_stability, prof.global_disorder, prof.prediction_accuracy,
+    );
+    eprintln!("[iris] gate: R={} G={} P={} C={} | {}",
+        decision.resonance as u8, decision.grammar as u8,
+        decision.prediction_graph as u8, decision.context_pack as u8,
+        decision.rationale);
     if !prof.resonance_lags.is_empty() {
         eprintln!("[iris] resonance lags: {:?}",
             prof.resonance_lags.iter().take(4)
                 .map(|r| format!("{}:{:.3}", r.lag, r.strength)).collect::<Vec<_>>());
     }
 
-    if gate.passthrough {
+    if decision.passthrough {
         return write_passthrough(&data, output);
     }
 
@@ -70,26 +140,48 @@ pub fn compress(input: &Path, output: &Path) -> Result<()> {
     let mut grammar_bytes       = vec![];
     let mut pred_meta_bytes     = vec![];
 
-    // ── Stage 1: Multi-pass Resonance ────────────────────────────────────
+    // ── Stage 1: Multi-pass Resonance (with LagCache) ────────────────────
     let mut resonance_stack: Vec<resonance::ResonanceHeader> = vec![];
-    if gate.resonance {
+    let mut lag_cache = LagCache::new();
+    if decision.resonance {
         for pass in 0..MAX_RESONANCE_PASSES {
-            let pass_prof = if pass == 0 { prof.resonance_lags.clone() } else {
-                profile::profile(&working).resonance_lags
+            let t_pass = Instant::now();
+            let before_h = profile::byte_entropy(&working);
+
+            // Lag candidates for this pass:
+            //   pass 0: take them from the initial profile
+            //   pass n: first try the LagCache (probe sample only),
+            //   else: run the cheap sampled profile on the residual.
+            let pass_lags: Vec<profile::ResonanceLag> = if pass == 0 {
+                prof.resonance_lags.clone()
+            } else if let Some(hit) = lag_cache.probe(&working) {
+                vec![hit]
+            } else {
+                profile::profile_fast(&working).resonance_lags
             };
-            if pass_prof.is_empty() { break; }
-            match resonance::extract(&working, &pass_prof) {
+
+            if pass_lags.is_empty() { break; }
+
+            match resonance::extract(&working, &pass_lags) {
                 Some((hdr, residual)) => {
-                    eprintln!("[iris] resonance pass {} lag={} s={:.3} {}→{}B",
-                        pass+1, hdr.lag, hdr.strength, working.len(), residual.len());
+                    let after_h = profile::byte_entropy(&residual);
+                    lag_cache.note(hdr.lag as usize, hdr.strength as f64);
+                    eprintln!(
+                        "[iris] resonance pass {} lag={} s={:.3} {}→{}B (H {:.3}→{:.3}) {:.1}ms",
+                        pass+1, hdr.lag, hdr.strength, working.len(), residual.len(),
+                        before_h, after_h, t_pass.elapsed().as_secs_f64()*1000.0
+                    );
                     resonance_stack.push(hdr);
                     working = residual;
                     flags |= FLAG_RESONANCE;
-                    // Stop if residual is near-trivial (ultra-compress will take it)
-                    if profile::byte_entropy(&working) < ULTRA_COMPRESS_ENTROPY { break; }
+                    if after_h < ULTRA_COMPRESS_ENTROPY { break; }
                 }
                 None => break,
             }
+        }
+        if lag_cache.hits + lag_cache.misses > 0 {
+            eprintln!("[iris] lag_cache: {} hit / {} miss",
+                lag_cache.hits, lag_cache.misses);
         }
     }
     // Serialize resonance stack: [n_passes: u8][hdr0][hdr1]...
@@ -101,17 +193,28 @@ pub fn compress(input: &Path, output: &Path) -> Result<()> {
     }
 
     // ── Stage 2: Grammar ─────────────────────────────────────────────────
-    if gate.grammar && !prof.resonance_lags.is_empty() {
+    if decision.grammar && !prof.resonance_lags.is_empty() {
+        let t_g = Instant::now();
+        let bytes_in = working.len();
+        let h_in = profile::byte_entropy(&working);
         let stride = prof.resonance_lags[0].lag;
         if let Some(tmpl) = grammar::infer(&working, stride) {
             if !tmpl.field_offsets.is_empty() && tmpl.coverage > grammar::GRAMMAR_MIN_COVERAGE {
                 let field_flat: Vec<u8> = tmpl.field_values.iter()
                     .flat_map(|fv| fv.iter().cloned()).collect();
                 if !field_flat.is_empty() {
-                    eprintln!("[iris] grammar stride={} cov={:.1}%", tmpl.stride, tmpl.coverage*100.0);
                     grammar_bytes = grammar::serialize(&tmpl);
+                    let bytes_out = field_flat.len();
+                    let h_out = profile::byte_entropy(&field_flat);
                     working = field_flat;
                     flags |= FLAG_GRAMMAR;
+                    StageReport {
+                        name: "grammar", fired: true,
+                        elapsed_ms: t_g.elapsed().as_secs_f64()*1000.0,
+                        bytes_in, bytes_out, entropy_in: h_in, entropy_out: h_out,
+                    }.log();
+                    eprintln!("[iris] grammar stride={} cov={:.1}%",
+                        tmpl.stride, tmpl.coverage*100.0);
                 }
             }
         }
@@ -120,21 +223,32 @@ pub fn compress(input: &Path, output: &Path) -> Result<()> {
     let working_entropy = profile::byte_entropy(&working);
     eprintln!("[iris] working: {}B entropy={:.3}", working.len(), working_entropy);
 
-    // ── Stage 3: Prediction Graph — SKIP if ultra-compress will take it ─
-    if gate.prediction_graph
-        && working_entropy >= ULTRA_COMPRESS_ENTROPY   // only if not ultra
+    // ── Stage 3: Prediction Graph ────────────────────────────────────────
+    if decision.prediction_graph
+        && working_entropy >= ULTRA_COMPRESS_ENTROPY
         && working.len() >= prediction::PRED_BLOCK_SIZE * 2
     {
+        let t_p = Instant::now();
+        let bytes_in = working.len();
         let fps = compute_fingerprints(&working, prediction::PRED_BLOCK_SIZE);
         if fps.len() > 1 {
             let encodings = prediction::build(&working, &fps);
-            let dc = encodings.iter().filter(|e| matches!(e, prediction::BlockEncoding::Delta{..})).count();
+            let dc = encodings.iter()
+                .filter(|e| matches!(e, prediction::BlockEncoding::Delta{..})).count();
             eprintln!("[iris] pred graph {}/{} delta", dc, encodings.len());
             if dc > 0 {
                 let (payload, metas) = prediction::flatten_for_packing(&encodings);
                 pred_meta_bytes = container::serialize_pred_meta(&metas);
+                let h_out = profile::byte_entropy(&payload);
+                let h_in  = profile::byte_entropy(&working);
+                let bytes_out = payload.len();
                 working = payload;
                 flags |= FLAG_PRED_GRAPH;
+                StageReport {
+                    name: "pred-graph", fired: true,
+                    elapsed_ms: t_p.elapsed().as_secs_f64()*1000.0,
+                    bytes_in, bytes_out, entropy_in: h_in, entropy_out: h_out,
+                }.log();
             }
         }
     }
@@ -146,11 +260,13 @@ pub fn compress(input: &Path, output: &Path) -> Result<()> {
     let video_payload; let scatter_bytes; let ctx_hdr_bytes; let encoder_byte: u8;
 
     if working_entropy2 < ULTRA_COMPRESS_ENTROPY {
+        let t_c = Instant::now();
         eprintln!("[iris] ultra-compress: range coder (H={:.3})", working_entropy2);
         let compressed = crate::range_coder::encode(&working);
-        eprintln!("[iris] range: {}B → {}B ({:.1}x)",
+        eprintln!("[iris] range: {}B → {}B ({:.1}x) {:.1}ms",
             working.len(), compressed.len(),
-            working.len() as f64 / compressed.len().max(1) as f64);
+            working.len() as f64 / compressed.len().max(1) as f64,
+            t_c.elapsed().as_secs_f64()*1000.0);
         video_payload  = compressed;
         scatter_bytes  = vec![];
         ctx_hdr_bytes  = vec![];
@@ -158,17 +274,25 @@ pub fn compress(input: &Path, output: &Path) -> Result<()> {
         flags          |= FLAG_CONTEXT_PACK;
 
     } else if working_entropy2 < ZSTD_ROUTE_ENTROPY {
+        let t_c = Instant::now();
         eprintln!("[iris] rANS-route");
-        let working_prof = profile::profile(&working);
+
+        // Build the context table only now — this is the only route that
+        // actually needs it. On large files this saves us the 4·N bucket
+        // memory that the old pipeline always allocated upfront.
+        let ctx_table = profile::build_context_table(&working);
         let (flat, position_lists, hdr) =
-            context_pack::pack_with_positions(&working, &working_prof.context_table);
-        eprintln!("[iris] ctx pack {} contexts", hdr.context_map.len());
+            context_pack::pack_with_positions(&working, &ctx_table);
+        eprintln!("[iris] ctx pack {} contexts (bucket mem ≈ {}B)",
+            hdr.context_map.len(), ctx_table.memory_bytes());
 
         let scatter = container::serialize_scatter(&position_lists)?;
         let ctx_h   = context_pack::serialize_header(&hdr);
         let compressed = crate::rans::encode(&flat);
-        eprintln!("[iris] rANS flat: {}B → {}B ({:.1}x)",
-            flat.len(), compressed.len(), flat.len() as f64/compressed.len().max(1) as f64);
+        eprintln!("[iris] rANS flat: {}B → {}B ({:.1}x) {:.1}ms",
+            flat.len(), compressed.len(),
+            flat.len() as f64/compressed.len().max(1) as f64,
+            t_c.elapsed().as_secs_f64()*1000.0);
 
         video_payload  = compressed;
         scatter_bytes  = scatter;
@@ -177,18 +301,33 @@ pub fn compress(input: &Path, output: &Path) -> Result<()> {
         flags          |= FLAG_CONTEXT_PACK;
 
     } else {
-        // High-entropy route: hierarchical block matching + rANS residual coding
+        let t_c = Instant::now();
         eprintln!("[iris] block-match route");
         let compressed = crate::block_match::compress(&working);
-        eprintln!("[iris] block-match: {}B → {}B ({:.1}x)",
+        eprintln!("[iris] block-match: {}B → {}B ({:.1}x) {:.1}ms",
             working.len(), compressed.len(),
-            working.len() as f64 / compressed.len().max(1) as f64);
+            working.len() as f64 / compressed.len().max(1) as f64,
+            t_c.elapsed().as_secs_f64()*1000.0);
 
         video_payload  = compressed;
         scatter_bytes  = vec![];
         ctx_hdr_bytes  = vec![];
-        encoder_byte   = 0xFD;  // block-match marker
+        encoder_byte   = 0xFD;
         flags          |= FLAG_CONTEXT_PACK;
+    }
+
+    // ── Passthrough guard: if total output would be larger than input,
+    //    fall back to raw passthrough. This is the "never make files
+    //    bigger" promise. CONTAINER_FRAMING accounts for the fixed
+    //    magic+version+lengths+CRC32 bytes the outer container adds.
+    let total_meta: usize = resonance_hdr_bytes.len()
+        + grammar_bytes.len() + pred_meta_bytes.len()
+        + scatter_bytes.len() + ctx_hdr_bytes.len() + video_payload.len()
+        + CONTAINER_FRAMING;
+    if total_meta >= original_len && original_len > 0 {
+        eprintln!("[iris] structural stages did not beat raw ({}B) → passthrough guard",
+            total_meta);
+        return write_passthrough(&data, output);
     }
 
     let c = IrisContainer {
@@ -244,11 +383,9 @@ pub fn decompress(input: &Path, output: &Path) -> Result<()> {
     // ── Decompress video/flat ─────────────────────────────────────────────
     let working = if c.has_context_pack() {
         if c.encoder == 0xFC {
-            // Ultra-compress: video = range-coded working data
             crate::range_coder::decode(&c.video)
                 .ok_or_else(|| anyhow::anyhow!("corrupt range-coded data"))?
         } else if c.encoder == 0xFF {
-            // zstd-route
             let (hdr, _) = context_pack::deserialize_header(&c.ctx_hdr)
                 .ok_or_else(|| anyhow::anyhow!("corrupt ctx hdr"))?;
             let flat = crate::rans::decode(&c.video)
@@ -256,11 +393,9 @@ pub fn decompress(input: &Path, output: &Path) -> Result<()> {
             let position_lists = container::deserialize_scatter(&c.scatter_map)?;
             context_pack::unpack_full(&hdr, &flat, c.byte0, &position_lists)
         } else if c.encoder == 0xFD {
-            // Block-match route
             crate::block_match::decompress(&c.video)
                 .ok_or_else(|| anyhow::anyhow!("corrupt block-match data"))?
         } else {
-            // Legacy AV1 route — no longer produced, but handle for compat
             anyhow::bail!("unsupported encoder byte {:#04x} (legacy AV1?)", c.encoder);
         }
     } else {
@@ -298,7 +433,6 @@ pub fn decompress(input: &Path, output: &Path) -> Result<()> {
                 headers.push(hdr); pos += consumed;
             } else { break; }
         }
-        // Apply in reverse order
         let mut w = working;
         for hdr in headers.iter().rev() {
             w = resonance::reconstruct(hdr, &w);
@@ -324,6 +458,41 @@ pub fn info(input: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Emit just the profile + gate decision for a file (no compression).
+/// Useful for the genomic-harness experiments.
+pub fn profile_only(input: &Path) -> Result<()> {
+    let data = std::fs::read(input)
+        .with_context(|| format!("cannot read {:?}", input))?;
+    if data.is_empty() { anyhow::bail!("empty input"); }
+    let prof = profile::profile_fast(&data);
+    let gate_cfg = gate_from_env();
+    let decision = gate_cfg.decide(&prof);
+
+    println!("file              : {:?}", input);
+    println!("bytes             : {}", data.len());
+    println!("sample_bytes      : {}", prof.sample_bytes);
+    println!("global_entropy    : {:.4}", prof.global_entropy);
+    println!("local_entropy_std : {:.4}", prof.local_entropy_stddev);
+    println!("byte_mean         : {:.2}", prof.byte_mean);
+    println!("byte_variance     : {:.2}", prof.byte_variance);
+    println!("byte_skewness     : {:+.4}", prof.byte_skewness);
+    println!("pred_accuracy     : {:.4}", prof.prediction_accuracy);
+    println!("disorder          : {:.4}", prof.global_disorder);
+    println!("peak_stability    : {:.4}", prof.autocorr_peak_stability);
+    if let Some(l) = prof.resonance_lags.first() {
+        println!("dominant_lag      : {} (strength={:.3})", l.lag, l.strength);
+    } else {
+        println!("dominant_lag      : (none)");
+    }
+    println!("gate.resonance    : {}", decision.resonance);
+    println!("gate.grammar      : {}", decision.grammar);
+    println!("gate.pred_graph   : {}", decision.prediction_graph);
+    println!("gate.context_pack : {}", decision.context_pack);
+    println!("gate.passthrough  : {}", decision.passthrough);
+    println!("gate.rationale    : {}", decision.rationale);
+    Ok(())
+}
+
 fn write_passthrough(data: &[u8], output: &Path) -> Result<()> {
     let encoded = crate::rans::encode(data);
     let (video_data, encoder_byte) = if encoded.len() >= data.len() {
@@ -345,9 +514,6 @@ fn write_passthrough(data: &[u8], output: &Path) -> Result<()> {
 }
 
 /// Compute SimHash fingerprints for each block.
-/// SimHash: for each 4-byte shingle in the block, hash to u64 and accumulate
-/// a 64-dimensional signed weight vector. Final fingerprint = sign bits.
-/// This correctly approximates cosine similarity via Hamming distance.
 fn compute_fingerprints(data: &[u8], block_size: usize) -> Vec<u64> {
     let n_blocks = (data.len() + block_size - 1) / block_size;
     let mut fps = Vec::with_capacity(n_blocks);
@@ -365,7 +531,6 @@ pub fn simhash_block(block: &[u8]) -> u64 {
     let mut weights = [0i32; 64];
 
     if block.len() < 4 {
-        // Too short for shingles — hash the raw bytes
         let mut h: u64 = 0xcbf29ce484222325;
         for &b in block {
             h ^= b as u64;
@@ -375,13 +540,11 @@ pub fn simhash_block(block: &[u8]) -> u64 {
     }
 
     for window in block.windows(4) {
-        // FNV-1a hash of the 4-byte shingle → 64-bit feature hash
         let mut h: u64 = 0xcbf29ce484222325;
         for &b in window {
             h ^= b as u64;
             h = h.wrapping_mul(0x100000001b3);
         }
-        // Accumulate: each set bit adds +1, each clear bit adds -1
         for bit in 0..64 {
             if (h >> bit) & 1 == 1 {
                 weights[bit] += 1;
@@ -391,7 +554,6 @@ pub fn simhash_block(block: &[u8]) -> u64 {
         }
     }
 
-    // Final fingerprint: sign bits
     let mut fp: u64 = 0;
     for bit in 0..64 {
         if weights[bit] > 0 {
@@ -423,4 +585,3 @@ fn rebuild_from_pred(working: &[u8], metas: &[crate::prediction::BlockMeta]) -> 
     }
     decoded.into_iter().filter_map(|d| d).flatten().collect()
 }
-

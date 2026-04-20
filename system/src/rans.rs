@@ -157,20 +157,16 @@ pub fn encode(data: &[u8]) -> Vec<u8> {
 
     let model = Order1Model::build(data);
 
-    // rANS encode — process data in reverse, output will be reversed at end
+    // rANS encode — process data in reverse, output will be reversed at
+    // end. We walk `data` directly instead of building a `Vec<(u8,u8)>`
+    // of pairs: that vector used to cost 2·n bytes which was a real
+    // concern when `data` was a 100+ MB context-packed flat buffer.
     let mut rans_state: u32 = RANS_LOWER;
     let mut encoded_bytes: Vec<u8> = Vec::with_capacity(data.len());
 
-    // Build (context, symbol) pairs forward, then encode backward
-    let mut pairs: Vec<(u8, u8)> = Vec::with_capacity(data.len());
-    let mut prev = 0u8;
-    for &b in data {
-        pairs.push((prev, b));
-        prev = b;
-    }
-
-    // Encode in reverse order
-    for &(ctx, sym) in pairs.iter().rev() {
+    for i in (0..data.len()).rev() {
+        let ctx = if i == 0 { 0u8 } else { data[i - 1] };
+        let sym = data[i];
         let freqs = model.get(ctx).unwrap();
         let f = freqs.freq[sym as usize] as u32;
         let c = freqs.cum[sym as usize] as u32;
