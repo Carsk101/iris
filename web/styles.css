@@ -66,11 +66,15 @@ nav {
   background: rgba(245, 240, 232, 0.95);
   backdrop-filter: blur(10px);
   opacity: 0;
-  transition: opacity 1s var(--ease);
+  transform: translateY(-100%);
+  transition: opacity 0.5s var(--ease), transform 0.5s var(--ease);
+  pointer-events: none;
 }
 
 nav.visible {
   opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .nav-left {

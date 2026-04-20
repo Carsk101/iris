@@ -103,24 +103,34 @@ document.addEventListener('DOMContentLoaded', () => {
     // Hero and Cover reveal handling is now centralized in revealObserver
     const nav = document.querySelector('nav');
 
-    // Nav visibility on scroll
-    window.addEventListener('scroll', () => {
-        if (window.scrollY > 200) {
-            nav.classList.add('visible');
-        } else {
-            // Only hide on home page if we're at the top
-            if (document.body.classList.contains('home')) {
-                nav.classList.remove('visible');
-            }
-        }
-    }, { passive: true });
+    // Nav visibility on scroll direction
+    let lastScrollY = window.scrollY;
+    const isHome = document.body.classList.contains('home');
 
     // Initial state: visible immediately on subpages, hidden on home
-    if (!document.body.classList.contains('home')) {
+    if (!isHome) {
         nav.classList.add('visible');
     } else {
         nav.classList.remove('visible');
     }
+
+    window.addEventListener('scroll', () => {
+        const currentScrollY = window.scrollY;
+        
+        if (currentScrollY <= 0) {
+            // At the very top
+            if (!isHome) nav.classList.add('visible');
+            else nav.classList.remove('visible');
+        } else if (currentScrollY > lastScrollY && currentScrollY > 100) {
+            // Scrolling down
+            nav.classList.remove('visible');
+        } else if (currentScrollY < lastScrollY) {
+            // Scrolling up
+            nav.classList.add('visible');
+        }
+        
+        lastScrollY = currentScrollY;
+    }, { passive: true });
 
     // Hero headline stagger (for subpages)
     const heroHeadline = document.querySelector('.hero h1');
